@@ -15,6 +15,8 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
+.coverage
+.ruff_cache/
 .venv/
 venv/
 env/
@@ -30,10 +32,20 @@ env/
 *.exe
 *.out
 build/
+build_linux/
 bin/
 Debug/
 Release/
 cmake-build-*/
+dist/
+dist_linux/
+*.spec
 
 # Logs
 *.log
+
+# Coursework runtime outputs
+Res*.txt
+bench*.csv
+experiments/*.csv
+experiments/*.txt
