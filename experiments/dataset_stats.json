@@ -1,0 +1,17 @@
+{
+  "n_nodes": 10000,
+  "n_edges": 150000,
+  "avg_out_degree": 15.0,
+  "avg_in_degree": 15.0,
+  "max_out_degree": 36,
+  "max_in_degree": 32,
+  "max_total_degree": 57,
+  "dead_end_count": 1500,
+  "dead_end_ratio": 0.15,
+  "weak_component_count": 501,
+  "largest_weak_component_size": 9500,
+  "largest_weak_component_ratio": 0.95,
+  "isolated_node_count": 500,
+  "self_loop_count": 15,
+  "duplicate_edge_count": 0
+}
