@@ -20,12 +20,12 @@
     "peak_rss_mb": {
       "csr": 34.364062,
       "csr_block": 34.660156,
-      "dense": 411.846875
+      "dense": 412.639323
     },
     "wall_sec": {
       "csr": 0.726331,
       "csr_block": 0.838039,
-      "dense": 0.634679
+      "dense": 0.602077
     },
     "iters": {
       "csr": 15.0,
@@ -66,9 +66,9 @@
   },
   "deadend": {
     "wall_sec": {
-      "compensation": 0.337515,
-      "ignore": 1.335256,
-      "delete": 0.602881
+      "compensation": 0.579767,
+      "ignore": 1.569576,
+      "delete": 0.498687
     },
     "iters": {
       "compensation": 15,

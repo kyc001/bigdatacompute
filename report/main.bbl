@@ -1,0 +1,29 @@
+\begin{thebibliography}{1}
+
+\bibitem{brin1998anatomy}
+Sergey Brin and Lawrence Page.
+\newblock The anatomy of a large-scale hypertextual web search engine.
+\newblock {\em Computer Networks and ISDN Systems}, 30(1--7):107--117, 1998.
+
+\bibitem{davis2006direct}
+Timothy~A. Davis.
+\newblock {\em Direct Methods for Sparse Linear Systems}.
+\newblock Society for Industrial and Applied Mathematics, 2006.
+
+\bibitem{langville2006google}
+Amy~N. Langville and Carl~D. Meyer.
+\newblock {\em Google's PageRank and Beyond: The Science of Search Engine
+  Rankings}.
+\newblock Princeton University Press, 2006.
+
+\bibitem{page1999pagerank}
+Lawrence Page, Sergey Brin, Rajeev Motwani, and Terry Winograd.
+\newblock The pagerank citation ranking: Bringing order to the web.
+\newblock Stanford InfoLab Technical Report, 1999.
+
+\bibitem{saad2003iterative}
+Yousef Saad.
+\newblock {\em Iterative Methods for Sparse Linear Systems}.
+\newblock Society for Industrial and Applied Mathematics, 2 edition, 2003.
+
+\end{thebibliography}
