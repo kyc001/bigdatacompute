@@ -13,9 +13,9 @@ import argparse
 import csv
 import json
 import os
+import shutil
 import subprocess
 import sys
-import tempfile
 import time
 
 import psutil
@@ -31,6 +31,17 @@ CSV_FIELDS = [
     "iters",
     "top10_signature",
 ]
+
+RUNTIME_TMP_ROOT = ".tmp_runtime"
+
+
+def make_runtime_tmp_dir(prefix: str) -> str:
+    """在工作区内创建可写临时目录，避免系统临时目录权限问题。"""
+
+    os.makedirs(RUNTIME_TMP_ROOT, exist_ok=True)
+    tmp_dir = os.path.join(RUNTIME_TMP_ROOT, f"{prefix}{os.getpid()}_{time.time_ns()}")
+    os.makedirs(tmp_dir, exist_ok=False)
+    return tmp_dir
 
 
 def collect_tree_rss(root: psutil.Process) -> int:
@@ -174,7 +185,8 @@ def main() -> None:
     rows: list[dict[str, object]] = []
     run_id = 1
 
-    with tempfile.TemporaryDirectory(prefix="pagerank_benchmark_") as tmp_dir:
+    tmp_dir = make_runtime_tmp_dir("pagerank_benchmark_")
+    try:
         for mode in modes:
             for _ in range(args.runs):
                 result_path = os.path.join(tmp_dir, f"{mode}_{run_id:03d}.txt")
@@ -193,6 +205,8 @@ def main() -> None:
                 row["run_id"] = run_id
                 rows.append(row)
                 run_id += 1
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
     write_rows(args.out, rows)
 

@@ -49,3 +49,10 @@ Res*.txt
 bench*.csv
 experiments/*.csv
 experiments/*.txt
+# Local runtime and test artifacts
+.tmp_test/
+.tmp_test_shared/
+.tmp_pytest/
+tmp_pytest/
+experiments/sweep_outputs/
+

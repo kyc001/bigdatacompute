@@ -1,203 +1,383 @@
-"""报告图表生成脚本。
-
-职责：
-- 从真实 CSV 读取实验数据；
-- 生成报告要求的核心 PNG；
-- 对尚未由 A/B 暴露的数据只标注待补，不手填、不估算。
-"""
+﻿"""论文风格实验图表生成脚本。"""
 
 from __future__ import annotations
 
 import argparse
-import csv
-from collections import defaultdict
+import json
 from pathlib import Path
-from statistics import mean
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 
-def read_csv(path: str) -> list[dict[str, str]]:
-    """读取 CSV；文件不存在时返回空列表，方便阶段性交付。"""
-
-    if not Path(path).exists():
-        return []
-    with open(path, "r", encoding="utf-8") as file_obj:
-        return list(csv.DictReader(file_obj))
-
-
-def to_float(value: str, default: float = 0.0) -> float:
-    """安全转浮点数。"""
-
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+PALETTE = {
+    "dense": "#4C566A",
+    "csr": "#2E5EAA",
+    "csr_block": "#C96A3D",
+    "float32": "#2E5EAA",
+    "float64": "#5B8C5A",
+    "compensation": "#2E5EAA",
+    "ignore": "#B23A48",
+    "delete": "#C96A3D",
+    "jaccard": "#2E5EAA",
+    "kendall": "#C96A3D",
+}
 
 
-def average_by(rows: list[dict[str, str]], keys: tuple[str, ...], metric: str) -> dict[tuple[str, ...], float]:
-    """按多个键分组求均值。"""
+def setup_style() -> None:
+    """设置统一的论文风格。"""
 
-    grouped: dict[tuple[str, ...], list[float]] = defaultdict(list)
-    for row in rows:
-        if row.get("status", "ok") != "ok":
-            continue
-        key = tuple(row.get(item, "") for item in keys)
-        grouped[key].append(to_float(row.get(metric, "")))
-    return {key: mean(values) for key, values in grouped.items() if values}
-
-
-def plot_memory_bar(e4_rows: list[dict[str, str]], out_dir: Path) -> None:
-    """绘制 E1/E2/E3/E4 内存峰值柱状图。
-
-    当前仓库尚未提供 A 的 E1 数据；脚本只绘制真实 CSV 中已有的 E2/E4，
-    并在图内标注 E1 待补。
-    """
-
-    import matplotlib.pyplot as plt
-
-    memory_avg = average_by(e4_rows, ("mode", "K", "dtype"), "peak_rss_mb")
-    labels = []
-    values = []
-    colors = []
-
-    csr_key = ("csr", "8", "float32")
-    block_key = ("csr_block", "8", "float32")
-    if csr_key in memory_avg:
-        labels.append("E2 CSR")
-        values.append(memory_avg[csr_key])
-        colors.append("#2F6B8F")
-    if block_key in memory_avg:
-        labels.append("E4 CSR+Block")
-        values.append(memory_avg[block_key])
-        colors.append("#C9653B")
-
-    fig, ax = plt.subplots(figsize=(7.2, 4.4), dpi=150)
-    if values:
-        bars = ax.bar(labels, values, color=colors, width=0.58)
-        ax.bar_label(bars, fmt="%.2f MB", padding=4, fontsize=9)
-    ax.text(
-        0.02,
-        0.94,
-        "E1 dense / E3 standalone block: pending real CSV from A/B",
-        transform=ax.transAxes,
-        fontsize=9,
-        color="#555555",
-        va="top",
+    mpl.rcParams.update(
+        {
+            "font.family": "serif",
+            "font.serif": ["Times New Roman", "DejaVu Serif"],
+            "font.size": 10,
+            "axes.titlesize": 11,
+            "axes.labelsize": 10,
+            "legend.fontsize": 9,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.linewidth": 0.8,
+            "grid.color": "#D8DEE9",
+            "grid.linewidth": 0.8,
+            "grid.alpha": 0.7,
+            "savefig.dpi": 300,
+            "savefig.bbox": "tight",
+            "figure.dpi": 150,
+            "mathtext.fontset": "dejavuserif",
+        }
     )
-    ax.set_ylabel("Peak RSS (MB)")
-    ax.set_title("Memory peak by implementation")
-    ax.grid(axis="y", alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(out_dir / "memory_peak_bar.png", dpi=300)
+
+
+def load_csv(path: Path) -> pd.DataFrame:
+    """读取 CSV。"""
+
+    return pd.read_csv(path)
+
+
+def mean_std(df: pd.DataFrame, group_col: str, value_col: str) -> pd.DataFrame:
+    """按列分组计算均值与标准差。"""
+
+    grouped = df.groupby(group_col, as_index=False)[value_col].agg(["mean", "std"]).reset_index()
+    grouped["std"] = grouped["std"].fillna(0.0)
+    return grouped
+
+
+def plot_degree_distribution(degree_csv: Path, out_dir: Path) -> None:
+    """绘制度分布图。"""
+
+    df = load_csv(degree_csv)
+    fig, axes = plt.subplots(1, 2, figsize=(8.2, 3.6), constrained_layout=True)
+
+    for ax, column, title, color in (
+        (axes[0], "out_count", "Out-degree distribution", "#2E5EAA"),
+        (axes[1], "in_count", "In-degree distribution", "#C96A3D"),
+    ):
+        ax.bar(df["degree"], df[column], color=color, width=0.85)
+        ax.set_yscale("log")
+        ax.set_xlabel("Degree")
+        ax.set_ylabel("Node count (log scale)")
+        ax.set_title(title)
+        ax.grid(axis="y")
+
+    fig.savefig(out_dir / "degree_distribution.png")
     plt.close(fig)
 
 
-def plot_k_tradeoff(e3_rows: list[dict[str, str]], out_dir: Path) -> None:
-    """绘制 K 与内存/时间双轴图。"""
+def plot_implementation_overview(e1_path: Path, e4_path: Path, out_dir: Path) -> None:
+    """绘制 E1/E2/E4 总览图。"""
 
-    import matplotlib.pyplot as plt
+    dense = load_csv(e1_path)
+    sparse = load_csv(e4_path)
+    df = pd.concat([dense, sparse], ignore_index=True)
+    order = ["dense", "csr", "csr_block"]
+    labels = ["Dense (E1)", "CSR (E2)", "CSR+Block (E4)"]
 
-    mem_avg = average_by(e3_rows, ("K",), "peak_rss_mb")
-    time_avg = average_by(e3_rows, ("K",), "wall_sec")
-    k_values = sorted({int(key[0]) for key in mem_avg.keys() | time_avg.keys()})
-    mem_values = [mem_avg[(str(k),)] for k in k_values]
-    time_values = [time_avg[(str(k),)] for k in k_values]
+    mem = df.groupby("mode")["peak_rss_mb"].agg(["mean", "std"]).reindex(order)
+    time = df.groupby("mode")["wall_sec"].agg(["mean", "std"]).reindex(order)
 
-    fig, ax_left = plt.subplots(figsize=(7.2, 4.4), dpi=150)
-    ax_right = ax_left.twinx()
-    ax_left.plot(k_values, mem_values, marker="o", color="#2F6B8F", label="Peak RSS")
-    ax_right.plot(k_values, time_values, marker="s", color="#C9653B", label="Wall time")
-    ax_left.set_xlabel("Block count K")
-    ax_left.set_ylabel("Peak RSS (MB)", color="#2F6B8F")
-    ax_right.set_ylabel("Wall time (s)", color="#C9653B")
-    ax_left.set_xticks(k_values)
-    ax_left.grid(axis="y", alpha=0.25)
-    ax_left.set_title("Block count trade-off")
-    fig.tight_layout()
-    fig.savefig(out_dir / "k_memory_time.png", dpi=300)
+    fig, axes = plt.subplots(1, 2, figsize=(8.4, 3.8), constrained_layout=True)
+    x = np.arange(len(order))
+    colors = [PALETTE[item] for item in order]
+
+    axes[0].bar(x, mem["mean"], yerr=mem["std"], capsize=4, color=colors, width=0.62)
+    axes[0].set_xticks(x, labels)
+    axes[0].set_ylabel("Peak RSS (MB)")
+    axes[0].set_title("Memory footprint by implementation")
+    axes[0].grid(axis="y")
+
+    axes[1].bar(x, time["mean"], yerr=time["std"], capsize=4, color=colors, width=0.62)
+    axes[1].set_xticks(x, labels)
+    axes[1].set_ylabel("Wall-clock time (s)")
+    axes[1].set_title("Runtime by implementation")
+    axes[1].grid(axis="y")
+
+    fig.savefig(out_dir / "implementation_overview.png")
     plt.close(fig)
 
 
-def plot_beta_similarity(sweep_rows: list[dict[str, str]], out_dir: Path) -> None:
-    """绘制 beta 与 Top-10 相似度关系。"""
+def plot_k_tradeoff(e3_path: Path, out_dir: Path) -> None:
+    """绘制 E3：K 值敏感性。"""
 
-    import matplotlib.pyplot as plt
+    df = load_csv(e3_path)
+    grouped = df.groupby("K").agg(
+        rss_mean=("peak_rss_mb", "mean"),
+        rss_std=("peak_rss_mb", "std"),
+        time_mean=("wall_sec", "mean"),
+        time_std=("wall_sec", "std"),
+    )
+    grouped = grouped.sort_index()
+    ks = grouped.index.to_numpy(dtype=int)
 
-    rows = [row for row in sweep_rows if row.get("experiment") == "E5_beta" and row.get("status") == "ok"]
-    rows.sort(key=lambda row: to_float(row["beta"]))
-    betas = [to_float(row["beta"]) for row in rows]
-    jaccard = [to_float(row["jaccard_vs_beta085"]) for row in rows]
-    tau = [to_float(row["kendall_tau_intersection_vs_beta085"]) for row in rows]
+    fig, axes = plt.subplots(1, 2, figsize=(8.4, 3.8), constrained_layout=True)
 
-    fig, ax = plt.subplots(figsize=(7.2, 4.4), dpi=150)
-    ax.plot(betas, jaccard, marker="o", color="#2F6B8F", label="Jaccard")
-    ax.plot(betas, tau, marker="s", color="#7A6A9B", label="Kendall tau")
-    ax.axvline(0.85, color="#555555", linestyle="--", linewidth=1)
-    ax.set_xlabel("Beta")
-    ax.set_ylabel("Top-10 similarity vs beta=0.85")
-    ax.set_ylim(0, 1.05)
-    ax.set_title("Teleport beta sensitivity")
-    ax.grid(axis="y", alpha=0.25)
-    ax.legend(frameon=False)
-    fig.tight_layout()
-    fig.savefig(out_dir / "beta_top10_similarity.png", dpi=300)
+    axes[0].plot(ks, grouped["rss_mean"], marker="o", color=PALETTE["csr"], linewidth=1.8)
+    axes[0].fill_between(
+        ks,
+        grouped["rss_mean"] - grouped["rss_std"].fillna(0.0),
+        grouped["rss_mean"] + grouped["rss_std"].fillna(0.0),
+        color=PALETTE["csr"],
+        alpha=0.15,
+    )
+    axes[0].set_xlabel("Block count K")
+    axes[0].set_ylabel("Peak RSS (MB)")
+    axes[0].set_title("Memory sensitivity to K")
+    axes[0].set_xticks(ks)
+    axes[0].grid(axis="y")
+
+    axes[1].plot(ks, grouped["time_mean"], marker="s", color=PALETTE["csr_block"], linewidth=1.8)
+    axes[1].fill_between(
+        ks,
+        grouped["time_mean"] - grouped["time_std"].fillna(0.0),
+        grouped["time_mean"] + grouped["time_std"].fillna(0.0),
+        color=PALETTE["csr_block"],
+        alpha=0.15,
+    )
+    axes[1].set_xlabel("Block count K")
+    axes[1].set_ylabel("Wall-clock time (s)")
+    axes[1].set_title("Runtime sensitivity to K")
+    axes[1].set_xticks(ks)
+    axes[1].grid(axis="y")
+
+    fig.savefig(out_dir / "k_tradeoff.png")
     plt.close(fig)
 
 
-def plot_epsilon_residual(sweep_rows: list[dict[str, str]], out_dir: Path) -> None:
-    """绘制 E6 的迭代轮数与最终残差。
+def plot_beta_sensitivity(sweep_path: Path, out_dir: Path) -> None:
+    """绘制 E5：beta 敏感性。"""
 
-    INTERFACE.md 当前只要求 main.py 输出最终 delta，尚未暴露逐轮 residual。
-    因此这里画的是真实采集到的 eps -> (iters, final delta) 汇总图。
-    """
+    df = load_csv(sweep_path)
+    beta_df = df[df["experiment"] == "E5_beta"].sort_values("beta")
 
-    import matplotlib.pyplot as plt
+    fig, axes = plt.subplots(1, 2, figsize=(8.6, 3.8), constrained_layout=True)
 
-    rows = [row for row in sweep_rows if row.get("experiment") == "E6_eps" and row.get("status") == "ok"]
-    rows.sort(key=lambda row: to_float(row["eps"]), reverse=True)
-    labels = [row["eps"] for row in rows]
-    iters = [to_float(row["iters"]) for row in rows]
-    deltas = [to_float(row["delta"]) for row in rows]
+    axes[0].plot(
+        beta_df["beta"],
+        beta_df["jaccard_vs_beta085"],
+        marker="o",
+        linewidth=1.8,
+        color=PALETTE["jaccard"],
+        label="Jaccard",
+    )
+    axes[0].plot(
+        beta_df["beta"],
+        beta_df["kendall_tau_intersection_vs_beta085"],
+        marker="s",
+        linewidth=1.8,
+        color=PALETTE["kendall"],
+        label="Kendall tau",
+    )
+    axes[0].axvline(0.85, color="#7B8794", linestyle="--", linewidth=1.0)
+    axes[0].set_xlabel(r"Damping factor $\beta$")
+    axes[0].set_ylabel("Top-10 similarity")
+    axes[0].set_ylim(0.75, 1.02)
+    axes[0].set_title("Ranking stability under beta sweep")
+    axes[0].legend(frameon=False, loc="lower left")
+    axes[0].grid(axis="y")
 
-    fig, ax_left = plt.subplots(figsize=(7.2, 4.4), dpi=150)
-    ax_right = ax_left.twinx()
-    xs = range(len(rows))
-    ax_left.bar(xs, iters, color="#2F6B8F", alpha=0.82, width=0.55, label="Iterations")
-    ax_right.plot(xs, deltas, marker="o", color="#C9653B", label="Final delta")
-    ax_right.set_yscale("log")
-    ax_left.set_xticks(list(xs))
-    ax_left.set_xticklabels(labels)
-    ax_left.set_xlabel("Epsilon")
-    ax_left.set_ylabel("Iterations")
-    ax_right.set_ylabel("Final L1 delta (log)")
-    ax_left.set_title("Convergence threshold sensitivity")
-    ax_left.grid(axis="y", alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(out_dir / "epsilon_residual_summary.png", dpi=300)
+    axes[1].plot(beta_df["beta"], beta_df["iters"], marker="o", color="#5B8C5A", linewidth=1.8)
+    axes[1].set_xlabel(r"Damping factor $\beta$")
+    axes[1].set_ylabel("Iterations to convergence")
+    axes[1].set_title("Convergence cost under beta sweep")
+    axes[1].grid(axis="y")
+
+    fig.savefig(out_dir / "beta_sensitivity.png")
     plt.close(fig)
+
+
+def plot_epsilon_sensitivity(sweep_path: Path, out_dir: Path) -> None:
+    """绘制 E6：epsilon 敏感性。"""
+
+    df = load_csv(sweep_path)
+    eps_df = df[df["experiment"] == "E6_eps"].copy()
+    eps_df["eps_value"] = eps_df["eps"].astype(float)
+    eps_df = eps_df.sort_values("eps_value")
+
+    fig, axes = plt.subplots(1, 2, figsize=(8.6, 3.8), constrained_layout=True)
+
+    axes[0].plot(eps_df["eps_value"], eps_df["iters"], marker="o", color=PALETTE["csr"], linewidth=1.8)
+    axes[0].set_xscale("log")
+    axes[0].invert_xaxis()
+    axes[0].set_xlabel(r"Convergence threshold $\varepsilon$")
+    axes[0].set_ylabel("Iterations")
+    axes[0].set_title("Iteration count vs. epsilon")
+    axes[0].grid(axis="y")
+
+    axes[1].plot(eps_df["eps_value"], eps_df["delta"], marker="s", color=PALETTE["csr_block"], linewidth=1.8)
+    axes[1].set_xscale("log")
+    axes[1].set_yscale("log")
+    axes[1].invert_xaxis()
+    axes[1].set_xlabel(r"Convergence threshold $\varepsilon$")
+    axes[1].set_ylabel("Final L1 delta")
+    axes[1].set_title("Terminal residual vs. epsilon")
+    axes[1].grid(axis="y")
+
+    fig.savefig(out_dir / "epsilon_sensitivity.png")
+    plt.close(fig)
+
+
+def plot_dtype_comparison(e7_path: Path, out_dir: Path) -> None:
+    """绘制 E7：dtype 对比。"""
+
+    df = load_csv(e7_path)
+    order = ["float32", "float64"]
+    labels = ["float32", "float64"]
+    mem = df.groupby("dtype")["peak_rss_mb"].agg(["mean", "std"]).reindex(order)
+    time = df.groupby("dtype")["wall_sec"].agg(["mean", "std"]).reindex(order)
+
+    fig, axes = plt.subplots(1, 2, figsize=(8.0, 3.8), constrained_layout=True)
+    x = np.arange(len(order))
+    colors = [PALETTE[item] for item in order]
+
+    axes[0].bar(x, mem["mean"], yerr=mem["std"], capsize=4, color=colors, width=0.62)
+    axes[0].set_xticks(x, labels)
+    axes[0].set_ylabel("Peak RSS (MB)")
+    axes[0].set_title("Memory cost by floating-point type")
+    axes[0].grid(axis="y")
+
+    axes[1].bar(x, time["mean"], yerr=time["std"], capsize=4, color=colors, width=0.62)
+    axes[1].set_xticks(x, labels)
+    axes[1].set_ylabel("Wall-clock time (s)")
+    axes[1].set_title("Runtime by floating-point type")
+    axes[1].grid(axis="y")
+
+    fig.savefig(out_dir / "dtype_comparison.png")
+    plt.close(fig)
+
+
+def plot_deadend_comparison(e8_path: Path, out_dir: Path) -> None:
+    """绘制 E8：dead-end 策略对比。"""
+
+    df = load_csv(e8_path)
+    order = ["compensation", "ignore", "delete"]
+    labels = ["Compensation", "Ignore", "Delete"]
+    colors = [PALETTE[item] for item in order]
+    df = df.set_index("strategy").loc[order].reset_index()
+    x = np.arange(len(order))
+
+    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.6), constrained_layout=True)
+
+    axes[0].bar(x, df["wall_sec"], color=colors, width=0.62)
+    axes[0].set_xticks(x, labels, rotation=12)
+    axes[0].set_ylabel("Wall-clock time (s)")
+    axes[0].set_title("Runtime")
+    axes[0].grid(axis="y")
+    for idx, row in df.iterrows():
+        axes[0].text(idx, row["wall_sec"] + 0.02, f"iters={int(row['iters'])}", ha="center", va="bottom", fontsize=8)
+
+    axes[1].bar(x, df["rank_sum"], color=colors, width=0.62)
+    axes[1].axhline(1.0, color="#7B8794", linestyle="--", linewidth=1.0)
+    axes[1].set_xticks(x, labels, rotation=12)
+    axes[1].set_ylabel("Sum of PageRank vector")
+    axes[1].set_title("Probability mass conservation")
+    axes[1].grid(axis="y")
+
+    axes[2].bar(x, df["jaccard_vs_compensation"], color=colors, width=0.62)
+    axes[2].set_ylim(0.0, 1.05)
+    axes[2].set_xticks(x, labels, rotation=12)
+    axes[2].set_ylabel("Jaccard vs. compensation")
+    axes[2].set_title("Top-10 consistency")
+    axes[2].grid(axis="y")
+
+    fig.savefig(out_dir / "deadend_strategy_comparison.png")
+    plt.close(fig)
+
+
+def write_report_summary(
+    stats_path: Path,
+    e1_path: Path,
+    e4_path: Path,
+    e3_path: Path,
+    e7_path: Path,
+    e8_path: Path,
+    sweep_path: Path,
+    out_path: Path,
+) -> None:
+    """把报告常用均值写成 JSON，便于 LaTeX/人工核对。"""
+
+    stats = json.loads(stats_path.read_text(encoding="utf-8"))
+    e1 = load_csv(e1_path)
+    e4 = load_csv(e4_path)
+    e3 = load_csv(e3_path)
+    e7 = load_csv(e7_path)
+    e8 = load_csv(e8_path)
+    sweep = load_csv(sweep_path)
+
+    summary = {
+        "dataset": stats,
+        "implementation": pd.concat([e1, e4], ignore_index=True).groupby("mode")[["peak_rss_mb", "wall_sec", "iters"]].mean().round(6).to_dict(),
+        "k_tradeoff": e3.groupby("K")[["peak_rss_mb", "wall_sec", "iters"]].mean().round(6).to_dict(),
+        "dtype": e7.groupby("dtype")[["peak_rss_mb", "wall_sec", "iters"]].mean().round(6).to_dict(),
+        "deadend": e8.set_index("strategy")[["wall_sec", "iters", "delta", "rank_sum", "jaccard_vs_compensation"]].round(6).to_dict(),
+        "beta": sweep[sweep["experiment"] == "E5_beta"].set_index("beta")[["iters", "jaccard_vs_beta085", "kendall_tau_intersection_vs_beta085"]].round(6).to_dict(),
+        "epsilon": sweep[sweep["experiment"] == "E6_eps"].set_index("eps")[["iters", "delta"]].round(12).to_dict(),
+    }
+    out_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def main() -> None:
     """命令行入口。"""
 
-    parser = argparse.ArgumentParser(description="Generate report figures from CSV")
+    parser = argparse.ArgumentParser(description="Generate publication-style figures for the PageRank report")
+    parser.add_argument("--dataset-stats", default="experiments/dataset_stats.json")
+    parser.add_argument("--degree-csv", default="experiments/degree_distribution.csv")
+    parser.add_argument("--e1", default="experiments/E1_dense.csv")
     parser.add_argument("--e3", default="experiments/E3.csv")
     parser.add_argument("--e4", default="experiments/E4.csv")
+    parser.add_argument("--e7", default="experiments/E7.csv")
+    parser.add_argument("--e8", default="experiments/E8.csv")
     parser.add_argument("--sweep", default="experiments/sweep_results.csv")
     parser.add_argument("--out-dir", default="report/fig")
+    parser.add_argument("--summary-json", default="experiments/report_summary.json")
     args = parser.parse_args()
 
+    setup_style()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    e3_rows = read_csv(args.e3)
-    e4_rows = read_csv(args.e4)
-    sweep_rows = read_csv(args.sweep)
-
-    plot_memory_bar(e4_rows, out_dir)
-    plot_k_tradeoff(e3_rows, out_dir)
-    plot_beta_similarity(sweep_rows, out_dir)
-    plot_epsilon_residual(sweep_rows, out_dir)
+    plot_degree_distribution(Path(args.degree_csv), out_dir)
+    plot_implementation_overview(Path(args.e1), Path(args.e4), out_dir)
+    plot_k_tradeoff(Path(args.e3), out_dir)
+    plot_beta_sensitivity(Path(args.sweep), out_dir)
+    plot_epsilon_sensitivity(Path(args.sweep), out_dir)
+    plot_dtype_comparison(Path(args.e7), out_dir)
+    plot_deadend_comparison(Path(args.e8), out_dir)
+    write_report_summary(
+        Path(args.dataset_stats),
+        Path(args.e1),
+        Path(args.e4),
+        Path(args.e3),
+        Path(args.e7),
+        Path(args.e8),
+        Path(args.sweep),
+        Path(args.summary_json),
+    )
     print(f"wrote figures to {out_dir}")
+    print(f"wrote summary to {args.summary_json}")
 
 
 if __name__ == "__main__":

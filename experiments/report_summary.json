@@ -1,0 +1,129 @@
+{
+  "dataset": {
+    "n_nodes": 10000,
+    "n_edges": 150000,
+    "avg_out_degree": 15.0,
+    "avg_in_degree": 15.0,
+    "max_out_degree": 36,
+    "max_in_degree": 32,
+    "max_total_degree": 57,
+    "dead_end_count": 1500,
+    "dead_end_ratio": 0.15,
+    "weak_component_count": 501,
+    "largest_weak_component_size": 9500,
+    "largest_weak_component_ratio": 0.95,
+    "isolated_node_count": 500,
+    "self_loop_count": 15,
+    "duplicate_edge_count": 0
+  },
+  "implementation": {
+    "peak_rss_mb": {
+      "csr": 34.364062,
+      "csr_block": 34.660156,
+      "dense": 411.846875
+    },
+    "wall_sec": {
+      "csr": 0.726331,
+      "csr_block": 0.838039,
+      "dense": 0.634679
+    },
+    "iters": {
+      "csr": 15.0,
+      "csr_block": 15.0,
+      "dense": 14.0
+    }
+  },
+  "k_tradeoff": {
+    "peak_rss_mb": {
+      "4": 35.090625,
+      "8": 34.978906,
+      "16": 34.923438
+    },
+    "wall_sec": {
+      "4": 0.704278,
+      "8": 0.728985,
+      "16": 0.855851
+    },
+    "iters": {
+      "4": 15.0,
+      "8": 15.0,
+      "16": 15.0
+    }
+  },
+  "dtype": {
+    "peak_rss_mb": {
+      "float32": 34.216406,
+      "float64": 35.339062
+    },
+    "wall_sec": {
+      "float32": 0.789474,
+      "float64": 0.718835
+    },
+    "iters": {
+      "float32": 15.0,
+      "float64": 12.0
+    }
+  },
+  "deadend": {
+    "wall_sec": {
+      "compensation": 0.337515,
+      "ignore": 1.335256,
+      "delete": 0.602881
+    },
+    "iters": {
+      "compensation": 15,
+      "ignore": 60,
+      "delete": 17
+    },
+    "delta": {
+      "compensation": 0.0,
+      "ignore": 0.0,
+      "delete": 0.0
+    },
+    "rank_sum": {
+      "compensation": 1.0,
+      "ignore": 0.602009,
+      "delete": 1.0
+    },
+    "jaccard_vs_compensation": {
+      "compensation": 1.0,
+      "ignore": 1.0,
+      "delete": 0.666667
+    }
+  },
+  "beta": {
+    "iters": {
+      "0.7": 13,
+      "0.8": 15,
+      "0.85": 15,
+      "0.9": 16,
+      "0.95": 16
+    },
+    "jaccard_vs_beta085": {
+      "0.7": 0.818182,
+      "0.8": 1.0,
+      "0.85": 1.0,
+      "0.9": 1.0,
+      "0.95": 0.818182
+    },
+    "kendall_tau_intersection_vs_beta085": {
+      "0.7": 0.833333,
+      "0.8": 0.955556,
+      "0.85": 1.0,
+      "0.9": 0.955556,
+      "0.95": 0.944444
+    }
+  },
+  "epsilon": {
+    "iters": {
+      "1e-06": 9,
+      "1e-08": 15,
+      "1e-10": 27
+    },
+    "delta": {
+      "1e-06": 3.50316e-07,
+      "1e-08": 7.17e-09,
+      "1e-10": 8e-11
+    }
+  }
+}

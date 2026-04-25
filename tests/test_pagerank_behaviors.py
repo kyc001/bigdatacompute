@@ -1,8 +1,8 @@
 import csv
 import json
+import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +16,17 @@ from mock_graph import (
     edge_formula_steps,
     edges_to_csr,
 )
+
+
+TEST_TMP_ROOT = Path(".tmp_test_shared")
+
+
+def _case_dir(name: str) -> str:
+    """在工作区内返回一个固定可写目录，避免系统临时目录权限问题。"""
+
+    path = TEST_TMP_ROOT / name
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 def test_small_graph_block_and_csr_match_handcalc_reference():
@@ -39,16 +50,16 @@ def test_small_graph_block_and_csr_match_handcalc_reference():
         eps=1e-10,
     )
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        metadata = build_blocks((graph.edges, graph.n_nodes), 2, tmpdir)
-        block_rank, _, _ = iterate_by_block(
-            metadata,
-            graph.out_deg,
-            graph.n_nodes,
-            beta=0.85,
-            eps=1e-10,
-            tmp_dir=tmpdir,
-        )
+    tmpdir = _case_dir("small_graph_block")
+    metadata = build_blocks((graph.edges, graph.n_nodes), 2, tmpdir)
+    block_rank, _, _ = iterate_by_block(
+        metadata,
+        graph.out_deg,
+        graph.n_nodes,
+        beta=0.85,
+        eps=1e-10,
+        tmp_dir=tmpdir,
+    )
 
     assert np.allclose(csr_rank, reference.astype(np.float32), atol=1e-6)
     assert np.allclose(block_rank, reference.astype(np.float32), atol=1e-6)
@@ -60,16 +71,16 @@ def test_random_graph_block_matches_dense_reference():
     graph = build_random_mock_graph()
     reference, _, _ = dense_reference_pagerank(graph.edges, graph.n_nodes, eps=1e-10)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        metadata = build_blocks(graph.edges, 8, tmpdir)
-        block_rank, _, _ = iterate_by_block(
-            metadata,
-            graph.out_deg,
-            graph.n_nodes,
-            beta=0.85,
-            eps=1e-8,
-            tmp_dir=tmpdir,
-        )
+    tmpdir = _case_dir("random_graph_block")
+    metadata = build_blocks(graph.edges, 8, tmpdir)
+    block_rank, _, _ = iterate_by_block(
+        metadata,
+        graph.out_deg,
+        graph.n_nodes,
+        beta=0.85,
+        eps=1e-8,
+        tmp_dir=tmpdir,
+    )
 
     assert np.allclose(block_rank, reference.astype(np.float32), atol=1e-6)
 
@@ -81,17 +92,17 @@ def test_results_are_stable_across_k_values():
     results = []
 
     for k_value in (1, 4, 8, 16):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            metadata = build_blocks(graph.edges, k_value, tmpdir)
-            ranks, _, _ = iterate_by_block(
-                metadata,
-                graph.out_deg,
-                graph.n_nodes,
-                beta=0.85,
-                eps=1e-8,
-                tmp_dir=tmpdir,
-            )
-            results.append(ranks)
+        tmpdir = _case_dir(f"stable_k_{k_value}")
+        metadata = build_blocks(graph.edges, k_value, tmpdir)
+        ranks, _, _ = iterate_by_block(
+            metadata,
+            graph.out_deg,
+            graph.n_nodes,
+            beta=0.85,
+            eps=1e-8,
+            tmp_dir=tmpdir,
+        )
+        results.append(ranks)
 
     assert np.allclose(results[0], results[1], atol=1e-6)
     assert np.allclose(results[1], results[2], atol=1e-6)
@@ -109,16 +120,16 @@ def test_all_dead_end_graph_is_uniform_after_compensation():
 
     csr_rank, _, _ = power_iteration(row_ptr, col_idx, out_deg, n_nodes, 0.85, 1e-10)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        metadata = build_blocks((iter(()), n_nodes), 2, tmpdir)
-        block_rank, _, _ = iterate_by_block(
-            metadata,
-            out_deg,
-            n_nodes,
-            beta=0.85,
-            eps=1e-10,
-            tmp_dir=tmpdir,
-        )
+    tmpdir = _case_dir("all_dead_end")
+    metadata = build_blocks((iter(()), n_nodes), 2, tmpdir)
+    block_rank, _, _ = iterate_by_block(
+        metadata,
+        out_deg,
+        n_nodes,
+        beta=0.85,
+        eps=1e-10,
+        tmp_dir=tmpdir,
+    )
 
     assert np.allclose(csr_rank, expected, atol=1e-7)
     assert np.allclose(block_rank, expected, atol=1e-7)
@@ -139,26 +150,27 @@ def test_spider_trap_graph_converges_normally():
     )
     row_ptr, col_idx, out_deg = edges_to_csr(edges, 5)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        metadata = build_blocks(edges, 2, tmpdir)
-        block_rank, _, _ = iterate_by_block(
-            metadata,
-            out_deg,
-            5,
-            beta=0.85,
-            eps=1e-10,
-            tmp_dir=tmpdir,
-        )
+    tmpdir = _case_dir("spider_trap")
+    metadata = build_blocks(edges, 2, tmpdir)
+    block_rank, _, _ = iterate_by_block(
+        metadata,
+        out_deg,
+        5,
+        beta=0.85,
+        eps=1e-10,
+        tmp_dir=tmpdir,
+    )
 
     top2 = np.argsort(-block_rank)[:2]
     assert set(map(int, top2)) == {2, 3}
     assert abs(float(block_rank.sum()) - 1.0) < 1e-5
 
 
-def test_benchmark_parses_stdout_json_and_writes_csv(tmp_path: Path):
+def test_benchmark_parses_stdout_json_and_writes_csv():
     """benchmark.py 应能解析 stdout 最后一行 JSON，并写出固定 schema CSV。"""
 
-    probe_script = tmp_path / "json_probe.py"
+    tmp_dir = Path(_case_dir("benchmark_probe"))
+    probe_script = tmp_dir / "json_probe.py"
     probe_script.write_text(
         "\n".join(
             [
@@ -192,9 +204,9 @@ def test_benchmark_parses_stdout_json_and_writes_csv(tmp_path: Path):
         encoding="utf-8",
     )
 
-    data_path = tmp_path / "dummy.txt"
+    data_path = tmp_dir / "dummy.txt"
     data_path.write_text("0 1\n", encoding="utf-8")
-    csv_path = tmp_path / "bench.csv"
+    csv_path = tmp_dir / "bench.csv"
 
     command = [
         sys.executable,
@@ -216,9 +228,13 @@ def test_benchmark_parses_stdout_json_and_writes_csv(tmp_path: Path):
         "--dtype",
         "float32",
     ]
-    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", check=False)
+    env = os.environ.copy()
+    env["TEMP"] = str(tmp_dir)
+    env["TMP"] = str(tmp_dir)
+    result = subprocess.run(command, capture_output=True, check=False, env=env)
+    stderr_text = result.stderr.decode("utf-8", errors="replace")
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, stderr_text
 
     with csv_path.open("r", encoding="utf-8") as file_obj:
         rows = list(csv.DictReader(file_obj))
