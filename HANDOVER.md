@@ -103,7 +103,7 @@ def dump_top_k(path: str, ranks: np.ndarray, k: int = 100) -> str
 
 ```python
 def build_blocks(edges, K: int, tmp_dir: str) -> list[dict]
-def iterate_by_block(blocks, out_deg, N, beta=0.85, eps=1e-8, dtype=np.float32, max_iter=200, tmp_dir=None) -> tuple[np.ndarray, int, float]
+def iterate_by_block(blocks, out_deg, N, beta=0.85, eps=1e-8, dtype=np.float32, max_iter=200, tmp_dir=None, chunk_size=1 << 15) -> tuple[np.ndarray, int, float]
 ```
 
 ### CLI 契约
@@ -287,9 +287,9 @@ pyinstaller --noconfirm --clean --onefile --name main main.py --exclude-module m
 
 | 配置 | 平均峰值 RSS / MB | 平均时间 / s | 收敛轮数 |
 | --- | ---: | ---: | ---: |
-| `csr_block, K=4, float32` | `35.16` | `0.376` | `15` |
-| `csr_block, K=8, float32` | `35.99` | `0.423` | `15` |
-| `csr_block, K=16, float32` | `34.97` | `0.457` | `15` |
+| `csr_block, K=4, float32` | `35.09` | `0.704` | `15` |
+| `csr_block, K=8, float32` | `34.98` | `0.729` | `15` |
+| `csr_block, K=16, float32` | `34.92` | `0.856` | `15` |
 
 结论：
 
@@ -301,21 +301,21 @@ pyinstaller --noconfirm --clean --onefile --name main main.py --exclude-module m
 
 | 配置 | 平均峰值 RSS / MB | 平均时间 / s | 收敛轮数 |
 | --- | ---: | ---: | ---: |
-| `csr, K=8, float32` | `33.42` | `0.492` | `15` |
-| `csr_block, K=8, float32` | `35.89` | `0.418` | `15` |
+| `csr, K=8, float32` | `34.36` | `0.726` | `15` |
+| `csr_block, K=8, float32` | `34.66` | `0.838` | `15` |
 
 结论：
 
-- 当前实现下，`csr_block` 比纯 `csr` 更快
-- 纯 `csr` 的 RSS 略低
+- 当前数据规模下，`csr_block` 与纯 `csr` 的 RSS 接近
+- 纯 `csr` 在最终汇总中略快
 - 主提交版本仍建议使用 `csr_block`
 
 ### E7：dtype 对比
 
 | 配置 | 平均峰值 RSS / MB | 平均时间 / s | 收敛轮数 |
 | --- | ---: | ---: | ---: |
-| `csr_block, K=8, float32` | `35.92` | `0.403` | `15` |
-| `csr_block, K=8, float64` | `36.27` | `0.366` | `12` |
+| `csr_block, K=8, float32` | `34.22` | `0.789` | `15` |
+| `csr_block, K=8, float64` | `35.34` | `0.719` | `12` |
 
 结论：
 
