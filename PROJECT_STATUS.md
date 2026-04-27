@@ -74,7 +74,7 @@ cd portable_check
 ## 后续 TODO
 
 1. 若老师明确要求提交数据集，再决定是否把 `Data.txt` 加入最终 zip；当前默认不提交数据。
-2. 提交前由 B 队长复核最终 zip、报告 PDF 和邮件正文。
+2. 提交前由小组复核最终 zip、报告 PDF 和邮件正文。
 3. 发送前可再运行一次 `portable_check/run_check.ps1` 做换机前确认。
 
 ## 风险
