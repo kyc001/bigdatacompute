@@ -44,15 +44,25 @@ dist_linux/
 # Logs
 *.log
 
+# LaTeX intermediate files
+report/*.aux
+report/*.log
+report/*.toc
+report/*.bbl
+report/*.blg
+report/*.out
+report/*.synctex.gz
+# Do not ignore report/main.pdf: the final submission needs the PDF artifact.
+
 # Coursework runtime outputs
 Res*.txt
 bench*.csv
 experiments/*.csv
 experiments/*.txt
 # Local runtime and test artifacts
+.tmp_runtime/
 .tmp_test/
 .tmp_test_shared/
 .tmp_pytest/
 tmp_pytest/
 experiments/sweep_outputs/
-

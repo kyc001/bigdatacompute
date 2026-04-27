@@ -17,21 +17,28 @@
 
 ```text
 .
+├─ main.py                         # PageRank 主入口，支持 dense/csr/block/csr_block
+├─ blocks.py                       # Block Matrix / memmap 分块迭代
+├─ baseline_dense.py               # E1 稠密基线
+├─ mock_graph.py                   # 小图与 reference 工具
+├─ benchmark.py                    # RSS/时间采样
+├─ analyze_dataset.py              # 数据集统计
+├─ sweep.py                        # beta/eps 参数扫描
+├─ plot.py                         # 实验图表与 summary 生成
 ├─ INTERFACE.md
 ├─ README.md
 ├─ CONTRIBUTING.md
 ├─ code_review_checklist.md
 ├─ requirements.txt
-├─ main.py
-├─ blocks.py
-├─ mock_graph.py
-├─ benchmark.py
-├─ tests/
-├─ report_ch4.md
-├─ report_ch6.md
 ├─ compile-parameter.txt
 ├─ cross_platform_checklist.md
-└─ HANDOVER.md
+├─ HANDOVER.md / HANDOVER_A.md / HANDOVER_C.md
+├─ experiments/                    # CSV/JSON 实验数据与最终运行冻结记录
+├─ report/                         # LaTeX 报告、PDF 与图表资源
+├─ report_ch1_draft1.md ... report_ch7.md
+├─ report_final.md
+├─ tests/                          # pytest 回归测试
+└─ 待填写学号姓名_第一次作业/        # 最终提交目录，占位名待人工改真实学号姓名
 ```
 
 ## 团队分工
@@ -59,13 +66,19 @@ pytest -q
 3. 跑主提交版本：
 
 ```bash
-python main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32
+python main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
 ```
 
 4. 跑 benchmark：
 
 ```bash
 python benchmark.py --main main.py --data Data.txt --out bench.csv --interval 0.05 --runs 3 --modes csr,csr_block
+```
+
+5. 查看最终冻结记录：
+
+```bash
+cat experiments/final_run_20260427/freeze.md
 ```
 
 ## 协作入口
