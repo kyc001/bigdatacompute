@@ -5,6 +5,7 @@
 - 负责人：B（队长）
 - 状态：`FROZEN`
 - 版本：`v1.0`
+- `v1.0.1 (2026-04-27)`: 增补可选参数 `chunk_size`，默认 `1 << 15`，向后兼容；不影响默认行为
 - 生效范围：A / B / C 全队
 - 变更规则：本文件冻结后，不允许直接改签名、改输出格式、改 dead-end 公式。若必须调整，先提 issue，再在下一个版本中变更。
 
@@ -175,6 +176,7 @@ def iterate_by_block(
     dtype: np.dtype = np.float32,
     max_iter: int = 200,
     tmp_dir: str | None = None,
+    chunk_size: int = 1 << 15,
 ) -> tuple[np.ndarray, int, float]:
     """
     返回:
