@@ -1,0 +1,16 @@
+本目录包含项目源码与可复现实验脚本。
+
+核心文件：
+- main.py：课程要求的 Python 主入口，支持 dense/csr/block/csr_block 模式。
+- blocks.py：Block Matrix 与 memmap 分块迭代实现。
+- mock_graph.py：测试辅助图与 reference 工具。
+- INTERFACE.md：冻结接口说明。
+- compile-parameter.txt：PyInstaller 打包命令。
+- requirements.txt：Python 依赖。
+- scripts/：baseline、benchmark、sweep、E8、绘图、数据分析以及老师提供的 memoryuse-python.py。
+- tests/：pytest 回归测试。
+
+推荐测试命令：
+micromamba activate test
+python -m pytest -q
+python main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8

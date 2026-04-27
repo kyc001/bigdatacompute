@@ -933,7 +933,7 @@ dtype & 平均峰值 RSS / MB & 平均时间 / s & 迭代轮数 \\
 
 \subsection{工程目标}
 
-工程部分的目标是保证 PageRank 实现可以稳定运行、方便复现实验，并能按统一格式输出结果。主入口为 \texttt{main.py}，负责参数解析、算法调度、结果写入和运行摘要输出；图结构构建、分块迭代和实验统计分别封装在独立模块中，避免主程序承担过多职责。
+工程部分的目标是保证 PageRank 实现可以稳定运行、方便复现实验，并能按统一格式输出结果。主入口为 \texttt{main.py}，负责参数解析、算法调度、结果写入和运行摘要输出；分块迭代由 \texttt{blocks.py} 提供，实验统计与绘图脚本统一放在 \texttt{scripts/} 目录中，避免根目录混杂临时工具。
 
 \subsection{项目结构}
 
@@ -941,8 +941,9 @@ dtype & 平均峰值 RSS / MB & 平均时间 / s & 迭代轮数 \\
 
 \begin{itemize}
 \item 核心实现：\texttt{main.py}、\texttt{blocks.py}、\texttt{mock\_graph.py}；
-\item 实验工具：\texttt{benchmark.py}、\texttt{sweep.py}、\texttt{plot.py}；
-\item 配置与说明：\texttt{requirements.txt}、\texttt{compile-parameter.txt}、\texttt{README.md}。
+\item 实验工具：\texttt{scripts/benchmark.py}、\texttt{scripts/sweep.py}、\texttt{scripts/plot.py}、\texttt{scripts/run\_e8.py}；
+\item 辅助工具：\texttt{scripts/memoryuse-python.py} 保留老师提供的内存采样脚本，用于人工复核；
+\item 配置与说明：\texttt{requirements.txt}、\texttt{docs/packaging/compile-parameter.txt}、\texttt{README.md}。
 \end{itemize}
 
 这种结构使算法实现、分块优化和实验绘图相互解耦。实验脚本只通过命令行调用主程序，不直接依赖内部函数，从而降低接口变动带来的影响。
@@ -971,19 +972,23 @@ python main.py --data Data.txt --beta 0.85 --eps 1e-8 --out Res.txt --mode csr_b
 }
 \end{lstlisting}
 
-该摘要便于 \texttt{benchmark.py} 自动收集运行时间、内存峰值、迭代轮数和 Top-10 签名。
+该摘要便于 \texttt{scripts/benchmark.py} 自动收集运行时间、内存峰值、迭代轮数和 Top-10 签名。
 
 \subsection{正确性与复现}
 
 正确性验证包括两类测试。第一类是小图测试，用于检查 dead-end 补偿、spider-trap 抑制和收敛判据是否符合公式。第二类是随机图对拍，用于比较普通 CSR 迭代和分块迭代的结果是否一致。实验结果统一写入 CSV，再由绘图脚本生成图表，保证报告中的数据可追溯。
 
+开发与复现主要在 Windows 的 \texttt{micromamba activate test} 环境中完成；同时使用 WSL 调用 Windows 版 micromamba 复跑源码测试，确认路径和命令在挂载目录下可用。由于 PowerShell 会把未加引号的逗号参数拆分，批量实验命令中的模式列表写为 \texttt{--modes 'csr,csr\_block'}。
+
 \subsection{打包与运行}
 
-最终可使用 PyInstaller 将 \texttt{main.py} 打包为单文件可执行程序。打包前先运行源码版本，确认 \texttt{Res.txt}、stdout JSON 和 Top-10 签名均正常；打包后再使用相同参数复测，比较源码版与可执行版的输出是否一致。该流程主要验证路径解析、依赖收集和结果格式，不改变算法逻辑。
+最终可使用 PyInstaller 将 \texttt{main.py} 打包为单文件可执行程序，打包参数保存在 \texttt{docs/packaging/compile-parameter.txt}。打包前先运行源码版本，确认 \texttt{Res.txt}、stdout JSON 和 Top-10 签名均正常；打包后再使用相同参数复测，比较源码版与可执行版的输出是否一致。该流程主要验证路径解析、依赖收集和结果格式，不改变算法逻辑。
+
+为便于换机检查，项目额外准备了本地可移动验证包 \texttt{portable\_check/}。该目录包含 \texttt{main.exe}、\texttt{Data.txt}、\texttt{run\_check.ps1} 和简短说明；PowerShell 脚本会运行主提交模式，生成 \texttt{Res\_check.txt}，检查结果文件行数和 Top-10 签名。由于其中包含数据集，该目录仅作为本地验证工具，不默认加入最终提交压缩包。
 
 \subsection{本章小结}
 
-工程实现围绕统一入口、固定输出格式和可复现实验展开。\texttt{main.py} 提供稳定 CLI，\texttt{benchmark.py} 与 CSV 记录实验数据，PyInstaller 用于最终交付。这样既保证 PageRank 结果可复现，也便于比较 CSR、分块数和浮点精度等不同设置的影响。
+工程实现围绕统一入口、固定输出格式和可复现实验展开。\texttt{main.py} 提供稳定 CLI，\texttt{scripts/benchmark.py} 与 CSV 记录实验数据，PyInstaller 用于最终交付，\texttt{portable\_check/} 用于换机复核。这样既保证 PageRank 结果可复现，也便于比较 CSR、分块数和浮点精度等不同设置的影响。
 
 
 \section{第 7 章 总结与反思}
@@ -998,13 +1003,13 @@ python main.py --data Data.txt --beta 0.85 --eps 1e-8 --out Res.txt --mode csr_b
 
 \begin{center}
 \small
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
 \toprule
-成员 & 代码模块 & 实验编号 & 报告章节 & 主要职责 \\
+成员 & 实验与章节 & 代码/脚本 & 主要职责 \\
 \midrule
-A & \texttt{load\_graph}、\texttt{power\_iteration}、\texttt{dump\_top\_k} & E1、E2、E8 & 第 2、3 章 & PageRank 核心算法与正确性验证 \\
-B & \texttt{build\_blocks}、\texttt{iterate\_by\_block}、\texttt{benchmark.py} & E3、E4、E7 & 第 4、6 章 & 分块优化、内存测试与工程集成 \\
-C & \texttt{analyze\_dataset.py}、\texttt{sweep.py}、\texttt{plot.py} & E5、E6、数据集分析 & 第 1、5、7 章 & 数据分析、参数实验与报告整理 \\
+匡航逸（A） & E1、E2、E8；第 2、3 章 & \texttt{main.py} 核心接口与 CSR 迭代 & PageRank 核心算法与正确性验证 \\
+柯云超（B） & E3、E4、E7；第 4、6 章 & \texttt{blocks.py} 与 \texttt{scripts/benchmark.py} & 分块优化、内存测试与工程集成 \\
+蒋林瀞（C） & E5、E6、数据集分析；第 1、5、7 章 & \texttt{scripts/} 数据分析、扫描与绘图脚本 & 数据分析、参数实验与报告整理 \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -1018,6 +1023,10 @@ C & \texttt{analyze\_dataset.py}、\texttt{sweep.py}、\texttt{plot.py} & E5、E
 第三，分块优化在小图上不一定带来最低 RSS，但它提供了更清晰的内存上界控制方式。当图规模扩大时，按目标节点分块可以避免一次性维护过大的更新工作集，因此具有更好的扩展意义。
 
 总体而言，本项目完成了从 PageRank 理论公式到稀疏存储、分块迭代、实验验证和工程交付的完整流程。实验结果说明，CSR 与 Block Matrix 的结合能够在保持结果一致性的同时满足内存约束。
+
+\subsection{AI 工具使用说明}
+
+在项目整理和报告定稿过程中，小组使用 OpenAI Codex 辅助检查目录结构、复核命令、整理文档表述和发现路径不一致问题。所有 PageRank 算法实现、实验数据、图表和最终结论均由小组成员人工复核；代码未调用任何现成 PageRank API，报告中的实验数字来自项目脚本和运行日志。
 
 
 \renewcommand{\refname}{参考文献}

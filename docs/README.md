@@ -21,3 +21,4 @@
 - 根目录 `INTERFACE.md` 是冻结接口契约，不随文档归档移动。
 - `report/` 保留 LaTeX 工程、PDF 与图表资源，因为 `plot.py` 和 `report/main.tex`
   当前默认使用该路径。
+- `portable_check/` 保留在根目录作为本地换机验证包，包含 `Data.txt`，不默认进入最终提交 zip。

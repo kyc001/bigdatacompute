@@ -40,6 +40,7 @@ cmake-build-*/
 dist/
 dist_linux/
 *.spec
+*.zip
 
 # Logs
 *.log
@@ -66,3 +67,6 @@ experiments/*.txt
 .tmp_pytest/
 tmp_pytest/
 experiments/sweep_outputs/
+
+# Local portable validation package; contains Data.txt and main.exe.
+portable_check/

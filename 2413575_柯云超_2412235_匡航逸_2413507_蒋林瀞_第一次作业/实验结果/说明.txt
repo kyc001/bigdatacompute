@@ -1,0 +1,13 @@
+本目录保存最终结果与实验摘要。
+
+文件：
+- Res.txt：beta=0.85、eps=1e-8、mode=csr_block、K=8、dtype=float32 的 Top-100 PageRank 结果。
+- report_summary.json：报告图表与实验结论使用的摘要数据。
+- final_run_20260427/：冻结运行记录。
+
+Res.txt 格式：
+NodeID Score
+
+Score 固定保留 10 位小数，排序为 PageRank 降序，同分按 NodeID 升序。
+当前 Top-10 signature：
+75,8686,9678,5104,725,3257,468,7730,7175,5526

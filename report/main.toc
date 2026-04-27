@@ -42,9 +42,10 @@
 \contentsline {subsection}{\numberline {6.2}项目结构}{21}{subsection.6.2}%
 \contentsline {subsection}{\numberline {6.3}命令行接口}{22}{subsection.6.3}%
 \contentsline {subsection}{\numberline {6.4}正确性与复现}{22}{subsection.6.4}%
-\contentsline {subsection}{\numberline {6.5}打包与运行}{22}{subsection.6.5}%
+\contentsline {subsection}{\numberline {6.5}打包与运行}{23}{subsection.6.5}%
 \contentsline {subsection}{\numberline {6.6}本章小结}{23}{subsection.6.6}%
 \contentsline {section}{\numberline {7}第 7 章 总结与反思}{23}{section.7}%
 \contentsline {subsection}{\numberline {7.1}工作总结}{23}{subsection.7.1}%
-\contentsline {subsection}{\numberline {7.2}团队分工}{23}{subsection.7.2}%
-\contentsline {subsection}{\numberline {7.3}经验与反思}{23}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.2}团队分工}{24}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}经验与反思}{24}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}AI 工具使用说明}{24}{subsection.7.4}%

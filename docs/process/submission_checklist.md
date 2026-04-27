@@ -1,6 +1,6 @@
 # 提交前核验清单
 
-> 状态口径：2026-04-24 阶段检查。未完成项不能在最终提交前跳过。
+> 状态口径：2026-04-27 收尾检查。未完成项不能在最终提交前跳过。
 
 ## 1. 目录与命名
 
@@ -12,6 +12,7 @@
 - [ ] 提交包中包含 `Report.pdf`
 - [ ] 提交包中包含 Windows 可执行文件 `main.exe` 或约定名称的 exe
 - [ ] 不把 `Data.txt` 放进最终提交包，除非老师另行要求
+- [ ] `portable_check/` 只作为本地验证包，不放入最终 zip
 
 ## 2. 结果文件
 
@@ -21,6 +22,7 @@
 - [ ] Score 固定保留 10 位小数
 - [ ] 排序为 Score 降序，同分 NodeID 升序
 - [ ] 源码版和 exe 版 Top-10 签名一致
+- [ ] `portable_check/run_check.ps1` 输出 PASS
 
 ## 3. 程序与性能
 
@@ -30,6 +32,8 @@
 - [ ] 运行时间低于 60 s，目标低于 30 s
 - [ ] 未调用 `networkx.pagerank`、`igraph.pagerank` 或特征向量 PageRank API
 - [ ] main.py 不 import `matplotlib`、`pandas`、`sklearn`
+- [ ] PowerShell 中 benchmark 使用 `--modes 'csr,csr_block'`
+- [ ] WSL 使用 `/mnt/d/micromamba/micromamba.exe run -n test` 完成源码冒烟
 
 ## 4. 报告
 
@@ -39,6 +43,9 @@
 - [ ] 报告包含 dead-end 与 spider-trap 处理
 - [ ] 报告包含实验结果与分析
 - [ ] 报告包含团队分工与贡献说明
+- [ ] 团队分工写明姓名和角色：匡航逸 A、柯云超 B 队长、蒋林瀞 C
+- [ ] 报告包含跨平台/可移动验证包说明
+- [ ] 报告包含 AI 工具使用说明
 - [ ] 图表均来自 CSV 或脚本输出，不手填数据
 - [ ] 所有“待补”字样在最终 PDF 前已清除或改成正式结果
 

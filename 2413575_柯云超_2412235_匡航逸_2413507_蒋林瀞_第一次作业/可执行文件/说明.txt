@@ -1,0 +1,9 @@
+本目录包含 Windows 单文件可执行程序。
+
+运行示例：
+main.exe --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
+
+说明：
+- main.exe 由 PyInstaller 生成，打包参数见 源码/compile-parameter.txt。
+- Data.txt 不在提交包内，运行时请把数据文件放在当前目录，或使用 --data 指定路径。
+- main.exe 是 Windows 可执行文件；Linux/macOS 需要运行源码或在对应平台重新打包。

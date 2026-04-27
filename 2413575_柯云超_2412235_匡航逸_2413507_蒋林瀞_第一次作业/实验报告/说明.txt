@@ -1,0 +1,10 @@
+本目录包含正式实验报告。
+
+文件：
+- Report.pdf：由 report/main.tex 重新编译生成。
+
+报告已更新内容：
+- 当前 scripts/ 目录结构。
+- 团队成员姓名与 A/B/C 分工。
+- Windows、WSL 与可移动验证包说明。
+- AI 工具使用说明。

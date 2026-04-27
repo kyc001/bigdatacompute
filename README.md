@@ -53,17 +53,46 @@ python -m pytest -q
 | `scripts/run_e8.py` | E8 dead-end 策略对比：补偿、忽略、删除。 |
 | `scripts/analyze_dataset.py` | 数据集画像，输出节点/边/degree/dead-end 等统计。 |
 | `scripts/plot.py` | 从实验 CSV/JSON 生成报告图表和 summary JSON。 |
+| `scripts/memoryuse-python.py` | 老师提供的运行时内存测量辅助脚本，作为 benchmark 之外的人工复核工具。 |
 
 示例命令：
 
 ```powershell
 python scripts/baseline_dense.py --data Data.txt --out Res_dense.txt --dtype float32
-python scripts/benchmark.py --main main.py --data Data.txt --out bench.csv --runs 3 --modes csr,csr_block
+python scripts/benchmark.py --main main.py --data Data.txt --out bench.csv --runs 3 --modes 'csr,csr_block'
 python scripts/sweep.py --main main.py --data Data.txt --out experiments/sweep_results.csv
 python scripts/run_e8.py --data Data.txt --out experiments/E8.csv
 python scripts/analyze_dataset.py --data Data.txt --out-json experiments/dataset_stats.json
 python scripts/plot.py --summary-json experiments/report_summary.json --out-dir report/fig
 ```
+
+PowerShell 会把未加引号的 `csr,csr_block` 当成数组拆开，所以 `--modes`
+参数在 PowerShell 中请使用 `'csr,csr_block'`。
+
+## 可移动验证包
+
+`portable_check/` 是本地换机验证目录，不作为最终 zip 提交内容。目录中包含
+`main.exe`、`Data.txt`、`run_check.ps1` 和说明文件，可在另一台 Windows
+机器或支持 Windows 可执行文件互操作的 WSL 环境中快速复核可执行文件：
+
+```powershell
+cd portable_check
+.\run_check.ps1
+```
+
+脚本会生成 `Res_check.txt`，检查 Top-10 签名是否为
+`75,8686,9678,5104,725,3257,468,7730,7175,5526`，并确认结果文件为 100 行。
+
+## 最终提交目录
+
+`2413575_柯云超_2412235_匡航逸_2413507_蒋林瀞_第一次作业/` 已按提交用途重建：
+
+- `源码/`：`main.py`、`blocks.py`、`scripts/`、`tests/`、依赖与打包参数。
+- `实验结果/`：`Res.txt`、实验摘要和冻结运行记录。
+- `实验报告/`：新版 `Report.pdf`。
+- `可执行文件/`：重新打包后的 `main.exe`。
+
+该目录默认不包含 `Data.txt`。
 
 ## 目录结构
 
@@ -73,10 +102,12 @@ python scripts/plot.py --summary-json experiments/report_summary.json --out-dir 
 ├─ blocks.py                       # Block Matrix / memmap 分块迭代
 ├─ mock_graph.py                   # 测试辅助图与 reference 工具
 ├─ scripts/                        # 可复现实验、分析、绘图脚本
+│  └─ memoryuse-python.py           # 老师提供的内存测量辅助脚本
 ├─ tests/                          # pytest 回归测试
 ├─ experiments/                    # 实验结果、summary、冻结运行记录
 ├─ docs/                           # 过程文档、交接文档、报告草稿
 ├─ report/                         # LaTeX 报告、PDF、图表资源
+├─ portable_check/                  # 本地可移动 Windows 验证包，不随最终 zip 提交
 ├─ INTERFACE.md                    # B 冻结的接口契约
 ├─ PROJECT_STATUS.md               # 当前状态与后续计划
 ├─ requirements.txt

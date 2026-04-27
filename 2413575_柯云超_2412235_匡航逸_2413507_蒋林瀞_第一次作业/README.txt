@@ -1,41 +1,23 @@
-PageRank 第一次作业运行说明
+PageRank 第一次作业提交包
 
-一、文件说明
+小组成员：
+- 2413575 柯云超（B，队长）
+- 2412235 匡航逸（A）
+- 2413507 蒋林瀞（C）
 
-main.py
-  Python 主入口，支持 dense / csr / block / csr_block 四种模式。
+目录说明：
+- 源码：Python 源码、冻结接口、实验脚本、测试用例和打包参数。
+- 实验结果：beta=0.85、eps=1e-8、csr_block+K=8+float32 的 Res.txt，以及实验摘要。
+- 实验报告：正式报告 PDF。
+- 可执行文件：Windows 单文件可执行程序 main.exe。
 
-blocks.py
-  分块矩阵相关实现，main.py 的 csr_block 模式依赖该文件。
+运行源码：
+micromamba activate test
+python 源码/main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
 
-compile-parameter.txt
-  PyInstaller 打包命令。
+运行可执行文件：
+可执行文件/main.exe --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
 
-main.exe
-  Windows 单文件可执行程序，由 PyInstaller 生成。
-
-Res.txt
-  beta = 0.85、eps = 1e-8、csr_block + K=8 + float32 下的 Top-100 PageRank 结果。
-
-Report.pdf
-  实验报告。
-
-二、源码运行命令
-
-python main.py --data Data.txt --beta 0.85 --eps 1e-8 --out Res.txt --mode csr_block --K 8 --dtype float32
-
-三、可执行文件运行命令
-
-main.exe --data Data.txt --beta 0.85 --eps 1e-8 --out Res.txt --mode csr_block --K 8 --dtype float32
-
-四、输出格式
-
-Res.txt 每行格式为：
-
-NodeID Score
-
-其中 Score 保留 10 位小数，输出按 Score 降序排列；Score 相同时按 NodeID 升序排列。
-
-五、实验环境
-
-开发与验证环境为 Windows + Python 3.12。主要依赖包括 numpy、scipy、psutil、pytest、pyinstaller、pandas、matplotlib。
+注意：
+- Data.txt 不包含在提交包内，请运行时把老师提供的数据文件放在当前工作目录，或用 --data 指向实际路径。
+- 源码/scripts/memoryuse-python.py 是老师提供的内存测量辅助脚本，保留用于人工复核。
