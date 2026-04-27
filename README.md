@@ -1,89 +1,108 @@
 # PageRank Coursework
 
-本仓库用于完成高性能计算课程 PageRank 作业。项目目标是在给定图数据集 `Data.txt` 上计算 PageRank，并输出 Top-100 节点到 `Res.txt`，同时满足内存与时间约束，并保留完整的工程化协作流程。
+本项目用于完成“大数据计算及应用”课程 PageRank 作业：读取 `Data.txt`
+中的有向边表，计算 PageRank，并把 Top-100 节点写入 `Res.txt`。
 
-## 目标与约束
+当前代码策略是：**保留 `main.py` 单文件主实现**，所有冻结接口、CLI 调度、
+CSR 迭代、稠密基线调用入口和结果输出都可以从 `main.py` 找到。分块实现按
+B 侧职责保留在 `blocks.py`，实验与分析脚本统一归档到 `scripts/`。
 
-- 语言：Python，入口文件固定为 `main.py`
-- 算法要求：必须实现 `CSR + Block Matrix`
-- 收敛参数：`beta = 0.85`，`eps = 1e-8`
-- 工程指标：
-  - 内存峰值 `<= 80 MB`
-  - 运行时间 `<= 60 s`
-- 禁止使用现成 PageRank API
-- 最终需要支持 PyInstaller 单文件打包
+## 环境
+
+使用课程/本机环境：
+
+```powershell
+micromamba activate test
+```
+
+依赖文件：
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+## 快速运行
+
+运行主提交模式：
+
+```powershell
+python main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
+```
+
+运行纯 CSR：
+
+```powershell
+python main.py --data Data.txt --out Res.txt --mode csr --dtype float32 --beta 0.85 --eps 1e-8
+```
+
+运行单元测试：
+
+```powershell
+python -m pytest -q
+```
+
+## 可复现实验脚本
+
+所有开发期实验脚本集中在 `scripts/`，避免污染根目录。
+
+| 脚本 | 用途 |
+| --- | --- |
+| `scripts/baseline_dense.py` | E1 稠密基线，对照 CSR 内存与时间。 |
+| `scripts/benchmark.py` | 多次运行 `main.py`，采样 RSS 和运行时间，输出 CSV。 |
+| `scripts/sweep.py` | E5/E6 参数扫描，扫 `beta` / `eps`。 |
+| `scripts/run_e8.py` | E8 dead-end 策略对比：补偿、忽略、删除。 |
+| `scripts/analyze_dataset.py` | 数据集画像，输出节点/边/degree/dead-end 等统计。 |
+| `scripts/plot.py` | 从实验 CSV/JSON 生成报告图表和 summary JSON。 |
+
+示例命令：
+
+```powershell
+python scripts/baseline_dense.py --data Data.txt --out Res_dense.txt --dtype float32
+python scripts/benchmark.py --main main.py --data Data.txt --out bench.csv --runs 3 --modes csr,csr_block
+python scripts/sweep.py --main main.py --data Data.txt --out experiments/sweep_results.csv
+python scripts/run_e8.py --data Data.txt --out experiments/E8.csv
+python scripts/analyze_dataset.py --data Data.txt --out-json experiments/dataset_stats.json
+python scripts/plot.py --summary-json experiments/report_summary.json --out-dir report/fig
+```
 
 ## 目录结构
 
 ```text
 .
-├─ main.py                         # PageRank 主入口，支持 dense/csr/block/csr_block
+├─ main.py                         # 单文件主实现与固定 CLI 入口
 ├─ blocks.py                       # Block Matrix / memmap 分块迭代
-├─ baseline_dense.py               # E1 稠密基线
-├─ mock_graph.py                   # 小图与 reference 工具
-├─ benchmark.py                    # RSS/时间采样
-├─ analyze_dataset.py              # 数据集统计
-├─ sweep.py                        # beta/eps 参数扫描
-├─ plot.py                         # 实验图表与 summary 生成
-├─ INTERFACE.md
-├─ README.md
-├─ CONTRIBUTING.md
-├─ code_review_checklist.md
-├─ requirements.txt
-├─ compile-parameter.txt
-├─ cross_platform_checklist.md
-├─ HANDOVER.md / HANDOVER_A.md / HANDOVER_C.md
-├─ experiments/                    # CSV/JSON 实验数据与最终运行冻结记录
-├─ report/                         # LaTeX 报告、PDF 与图表资源
-├─ report_ch1_draft1.md ... report_ch7.md
-├─ report_final.md
+├─ mock_graph.py                   # 测试辅助图与 reference 工具
+├─ scripts/                        # 可复现实验、分析、绘图脚本
 ├─ tests/                          # pytest 回归测试
-└─ 待填写学号姓名_第一次作业/        # 最终提交目录，占位名待人工改真实学号姓名
+├─ experiments/                    # 实验结果、summary、冻结运行记录
+├─ docs/                           # 过程文档、交接文档、报告草稿
+├─ report/                         # LaTeX 报告、PDF、图表资源
+├─ INTERFACE.md                    # B 冻结的接口契约
+├─ PROJECT_STATUS.md               # 当前状态与后续计划
+├─ requirements.txt
+└─ Data.txt
 ```
 
-## 团队分工
+## 输出约定
 
-| 角色 | 负责人 | 范围 |
-| --- | --- | --- |
-| A | 算法核心 | `load_graph / power_iteration / dump_top_k`，E1/E2/E8，第 2、3 章 |
-| B | 队长 + 工程基建 | `INTERFACE.md`、Git 规范、代码审查清单、`build_blocks`、`iterate_by_block`、`benchmark.py`、打包脚本 |
-| C | 数据分析 + 报告统稿 | `analyze_dataset.py / sweep.py / plot.py`，E5/E6，第 1、5、7 章，最终 zip 打包 |
+`Res.txt` 每行格式：
 
-## 快速开始
-
-1. 安装开发依赖：
-
-```bash
-python -m pip install -r requirements.txt
+```text
+NodeID Score
 ```
 
-2. 跑单元测试：
+- 最多输出 100 行，节点不足 100 个时输出全部节点。
+- `Score` 固定保留 10 位小数。
+- 排序规则：PageRank 降序；分数相同时按原始 `NodeID` 升序。
+- `main.py` stdout 最后一行必须是合法 JSON，供 `scripts/benchmark.py`
+  和 `scripts/sweep.py` 解析。
 
-```bash
-pytest -q
-```
+## 文档
 
-3. 跑主提交版本：
-
-```bash
-python main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
-```
-
-4. 跑 benchmark：
-
-```bash
-python benchmark.py --main main.py --data Data.txt --out bench.csv --interval 0.05 --runs 3 --modes csr,csr_block
-```
-
-5. 查看最终冻结记录：
-
-```bash
-cat experiments/final_run_20260427/freeze.md
-```
-
-## 协作入口
-
-- 接口契约：见 `INTERFACE.md`
-- Git / 分支 / 提交 / PR 规范：见 `CONTRIBUTING.md`
-- 代码审查清单：见 `code_review_checklist.md`
-- 跨平台验证步骤：见 `cross_platform_checklist.md`
+- 当前状态：[PROJECT_STATUS.md](PROJECT_STATUS.md)
+- 冻结接口：[INTERFACE.md](INTERFACE.md)
+- 文档索引：[docs/README.md](docs/README.md)
+- 交接文档：[docs/handover/](docs/handover/)
+- 报告草稿：[docs/report_drafts/](docs/report_drafts/)
+- 协作流程：[docs/process/](docs/process/)
+- 打包命令：[docs/packaging/compile-parameter.txt](docs/packaging/compile-parameter.txt)

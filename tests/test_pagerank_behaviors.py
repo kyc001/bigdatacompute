@@ -210,7 +210,7 @@ def test_benchmark_parses_stdout_json_and_writes_csv():
 
     command = [
         sys.executable,
-        "benchmark.py",
+        "scripts/benchmark.py",
         "--main",
         str(probe_script),
         "--data",

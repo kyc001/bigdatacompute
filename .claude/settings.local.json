@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(git log:*)",
+      "Bash(basename:*)",
+      "Bash(git worktree add:*)",
+      "Bash(git worktree list:*)",
+      "Bash(git fetch:*)",
+      "Bash(git worktree remove:*)",
+      "Bash(openspec *)",
+      "Bash(mvn clean compile:*)",
+      "Read",
+      "Edit",
+      "Write",
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "Bash(pwsh -Command \"Get-ChildItem ''D:\\\\Study\\\\parallel\\\\参考模板\\\\并行模板 2''\")",
+      "Bash(python -c \"import os; print\\(os.listdir\\(r''D:\\\\Study\\\\parallel\\\\参考模板\\\\并行模板 2''\\)\\)\")",
+      "Bash(python -c \"import os; print\\(os.listdir\\(r''D:\\\\Study\\\\parallel\\\\参考模板''\\)\\)\")"
+    ],
+    "defaultMode": "dontAsk"
+  }
+}
