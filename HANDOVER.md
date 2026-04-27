@@ -2,6 +2,8 @@
 
 本文档以“队长 B 写给未来要接手或复查整个工程的人”的口吻整理当前状态。请先读 `INTERFACE.md`，再读本文件。
 
+数据源：`experiments/report_summary.json`，最后核对 2026-04-27。
+
 > 最近一次全链路复核时间：**2026-04-25（UTC）**。本次复核覆盖 A/B/C 三侧脚本可运行性、`pytest`、`csr` 与 `csr_block` 真数运行、benchmark 单轮验证与 C 侧数据脚本可执行性。
 
 ## 0. 本次复核记录（2026-04-25）
@@ -124,16 +126,11 @@ python main.py --data Data.txt --beta 0.85 --eps 1e-8 --out Res.txt --mode csr_b
 {"peak_rss_mb": 0.0, "wall_sec": 0.0, "iters": 0}
 ```
 
-当前实现还会额外输出：
+当前实现输出字段全集为：
 
-- `mode`
-- `K`
-- `dtype`
-- `delta`
-- `n_nodes`
-- `n_edges`
-- `top10_signature`
-- `out`
+```text
+peak_rss_mb, wall_sec, iters, mode, K, dtype, delta, n_nodes, n_edges, top10_signature
+```
 
 ### dead-end 公式
 
