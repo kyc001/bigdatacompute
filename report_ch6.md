@@ -131,7 +131,7 @@ python main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype floa
 2. 再执行：
 
 ```bash
-pyinstaller --noconfirm --clean --onefile --name pagerank main.py ...
+pyinstaller --noconfirm --clean --onefile --name main main.py ...
 ```
 
 3. 进入 `dist/` 目录运行生成的可执行文件，复测一遍 `Data.txt`。

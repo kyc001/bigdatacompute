@@ -50,13 +50,13 @@ python benchmark.py --main main.py --data Data.txt --out bench.csv --interval 0.
 
 ```powershell
 Get-Content compile-parameter.txt
-pyinstaller --noconfirm --clean --onefile --name pagerank main.py --exclude-module matplotlib --exclude-module tkinter --exclude-module PIL --exclude-module pytest
+pyinstaller --noconfirm --clean --onefile --name main main.py --exclude-module matplotlib --exclude-module tkinter --exclude-module PIL --exclude-module pytest
 ```
 
 8. 运行打包后的 exe：
 
 ```powershell
-.\dist\pagerank.exe --data Data.txt --out Res_packaged.txt --mode csr_block --K 8 --dtype float32
+.\dist\main.exe --data Data.txt --out Res_packaged.txt --mode csr_block --K 8 --dtype float32
 ```
 
 9. 对比源码版与打包版：
