@@ -19,5 +19,5 @@ python 源码/main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dty
 可执行文件/main.exe --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
 
 注意：
-- Data.txt 不包含在提交包内，请运行时把老师提供的数据文件放在当前工作目录，或用 --data 指向实际路径。
+- Data.txt 已包含在提交包根目录，可直接运行。
 - 源码/scripts/memoryuse-python.py 是老师提供的内存测量辅助脚本，保留用于人工复核。

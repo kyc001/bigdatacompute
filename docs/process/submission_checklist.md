@@ -11,7 +11,7 @@
 - [ ] 提交包中包含 `Res.txt`
 - [ ] 提交包中包含 `Report.pdf`
 - [ ] 提交包中包含 Windows 可执行文件 `main.exe` 或约定名称的 exe
-- [ ] 不把 `Data.txt` 放进最终提交包，除非老师另行要求
+- [x] `Data.txt` 已放入提交包，方便老师直接运行
 - [ ] `portable_check/` 只作为本地验证包，不放入最终 zip
 
 ## 2. 结果文件
