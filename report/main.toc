@@ -42,7 +42,7 @@
 \contentsline {subsection}{\numberline {6.2}项目结构}{21}{subsection.6.2}%
 \contentsline {subsection}{\numberline {6.3}命令行接口}{22}{subsection.6.3}%
 \contentsline {subsection}{\numberline {6.4}正确性与复现}{22}{subsection.6.4}%
-\contentsline {subsection}{\numberline {6.5}打包与运行}{23}{subsection.6.5}%
+\contentsline {subsection}{\numberline {6.5}打包与跨平台运行}{23}{subsection.6.5}%
 \contentsline {subsection}{\numberline {6.6}本章小结}{23}{subsection.6.6}%
 \contentsline {section}{\numberline {7}第 7 章 总结与反思}{23}{section.7}%
 \contentsline {subsection}{\numberline {7.1}工作总结}{23}{subsection.7.1}%

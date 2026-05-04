@@ -1,1 +1,5 @@
+# PyInstaller 打包命令
+# 在源码目录下执行，生成单文件可执行程序
+# Windows: dist/main.exe    Linux/macOS: dist/main
+
 pyinstaller --noconfirm --clean --onefile --name main main.py --exclude-module matplotlib --exclude-module tkinter --exclude-module PIL --exclude-module pytest

@@ -963,15 +963,17 @@ python main.py --data Data.txt --beta 0.85 --eps 1e-8 --out Res.txt --mode csr_b
 
 开发与复现主要在 Windows 的 \texttt{micromamba activate test} 环境中完成；同时使用 WSL 调用 Windows 版 micromamba 复跑源码测试，确认路径和命令在挂载目录下可用。由于 PowerShell 会把未加引号的逗号参数拆分，批量实验命令中的模式列表写为 \texttt{--modes 'csr,csr\_block'}。
 
-\subsection{打包与运行}
+\subsection{打包与跨平台运行}
 
-最终可使用 PyInstaller 将 \texttt{main.py} 打包为单文件可执行程序，打包参数保存在 \texttt{docs/packaging/compile-parameter.txt}。打包前先运行源码版本，确认 \texttt{Res.txt}、stdout JSON 和 Top-10 签名均正常；打包后再使用相同参数复测，比较源码版与可执行版的输出是否一致。该流程主要验证路径解析、依赖收集和结果格式，不改变算法逻辑。
+使用 PyInstaller 将 \texttt{main.py} 打包为单文件可执行程序，打包参数保存在 \texttt{源码/compile-parameter.txt}。PyInstaller 会将 numpy、scipy 等依赖一并打包，生成的可执行文件无需额外安装 Python 环境即可运行。打包前先运行源码版本确认结果正常，打包后再用相同参数复测，比较源码版与可执行版的 Top-10 签名是否一致。
+
+由于 PyInstaller 只能打包当前平台的可执行文件，无法交叉编译，因此提交包中提供 Windows 版 \texttt{main.exe}。Linux 或 macOS 用户可以使用源码运行，也可以在对应平台执行相同的 PyInstaller 命令生成本地可执行文件。提交包中附带 \texttt{Data.txt}，确保老师可以直接运行验证。
 
 为便于换机检查，项目额外准备了本地可移动验证包 \texttt{portable\_check/}。该目录包含 \texttt{main.exe}、\texttt{Data.txt}、\texttt{run\_check.ps1} 和简短说明；PowerShell 脚本会运行主提交模式，生成 \texttt{Res\_check.txt}，检查结果文件行数和 Top-10 签名。由于其中包含数据集，该目录仅作为本地验证工具，不默认加入最终提交压缩包。
 
 \subsection{本章小结}
 
-工程实现围绕统一入口、固定输出格式和可复现实验展开。\texttt{main.py} 提供稳定 CLI，\texttt{scripts/benchmark.py} 与 CSV 记录实验数据，PyInstaller 用于最终交付，\texttt{portable\_check/} 用于换机复核。这样既保证 PageRank 结果可复现，也便于比较 CSR、分块数和浮点精度等不同设置的影响。
+工程实现围绕统一入口、固定输出格式和可复现实验展开。\texttt{main.py} 提供稳定 CLI，\texttt{scripts/benchmark.py} 与 CSV 记录实验数据，PyInstaller 用于生成免安装可执行文件，\texttt{portable\_check/} 用于换机复核。跨平台方面，Windows 用户可直接运行 \texttt{main.exe}，Linux / macOS 用户可使用源码或在本地重新打包。
 
 
 \section{第 7 章 总结与反思}
