@@ -1,17 +1,1 @@
-本目录包含 Windows 单文件可执行程序。
-
-运行示例：
-main.exe --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
-
-说明：
-- main.exe 由 PyInstaller 生成，已将 numpy、scipy 等依赖静态打包，无需额外安装 Python 环境。
-- 打包参数见 源码/compile-parameter.txt。
-- main.exe 仅适用于 Windows 系统。
-
-跨平台说明：
-- Linux / macOS 用户请使用源码运行，步骤如下：
-    1. 安装依赖：pip install numpy scipy psutil
-    2. 运行：python 源码/main.py --data Data.txt --out Res.txt --mode csr_block --K 8 --dtype float32 --beta 0.85 --eps 1e-8
-- 如需在 Linux / macOS 生成可执行文件，在源码目录执行：
-    pyinstaller --noconfirm --clean --onefile --name main main.py --exclude-module matplotlib --exclude-module tkinter --exclude-module PIL --exclude-module pytest
-    生成的可执行文件位于 dist/main。
+由pyinstaller打包。如果文件下没有同目录的Data.txt，就会自动使用内置的数据集（也就是本次实验使用的数据集）进行实验，最后输出Res.txt。
