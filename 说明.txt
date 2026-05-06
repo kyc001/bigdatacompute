@@ -1,0 +1,1 @@
+main.py需要Data.txt才可正常运行。requirement.txt记录了本次实验所需python库，其中核心运行部分为main.py函数运行需要，其他库仅在画图与打包时使用。
