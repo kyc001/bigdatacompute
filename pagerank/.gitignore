@@ -1,0 +1,72 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.coverage
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# C/C++ build artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+build/
+build_linux/
+bin/
+Debug/
+Release/
+cmake-build-*/
+dist/
+dist_linux/
+*.spec
+*.zip
+
+# Logs
+*.log
+
+# LaTeX intermediate files
+report/*.aux
+report/*.log
+report/*.toc
+report/*.bbl
+report/*.blg
+report/*.out
+report/*.synctex.gz
+# Do not ignore report/main.pdf: the final submission needs the PDF artifact.
+
+# Coursework runtime outputs
+Res*.txt
+bench*.csv
+experiments/*.csv
+experiments/*.txt
+# Local runtime and test artifacts
+.tmp_runtime/
+.tmp_test/
+.tmp_test_shared/
+.tmp_pytest/
+tmp_pytest/
+experiments/sweep_outputs/
+
+# Local portable validation package; contains Data.txt and main.exe.
+portable_check/
