@@ -1,6 +1,13 @@
 # Parent workspace local files
 /.claude/
 /.vscode/
+/.pixi/
+
+# Local Trellis/AI agent setup
+/.trellis/
+/.agents/
+/.codex/
+/AGENTS.md
 
 # Common generated caches
 **/__pycache__/
@@ -8,6 +15,12 @@
 **/.pytest_cache/
 **/.mypy_cache/
 **/.ruff_cache/
+
+# Coursework generated outputs
+/rec-sys/task1/outputs/
+/rec-sys/task2/*.zip
+/rec-sys/task2/track1/secure_data_full_1024/*.npy
+/rec-sys/task2/track1/secure_data_full_1024/*.bin
 
 # OS/editor noise
 .DS_Store

@@ -1,0 +1,25 @@
+[workspace]
+name = "bigdatacompute"
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+python = ">=3.11,<3.13"
+numpy = ">=2.0,<3"
+
+[tasks]
+task1-stats = "python rec-sys/task1/run.py stats"
+task1-analysis = "python rec-sys/task1/run.py analysis"
+task1-baseline = "python rec-sys/task1/run.py evaluate --model baseline"
+task1-baseline-tuned = "python rec-sys/task1/run.py evaluate --model baseline --shrinkage 5 --bias-iterations 5"
+task1-mf-smoke = "python rec-sys/task1/run.py evaluate --model mf --epochs 8 --factors 16 --validation-ratio 0.2"
+task1-mf-tuned = "python rec-sys/task1/run.py evaluate --model mf --epochs 2 --factors 8 --lr 0.005 --reg 0.05"
+task1-blend-tuned = "python rec-sys/task1/run.py evaluate --model blend --epochs 3 --factors 16 --lr 0.004 --reg 0.05 --shrinkage 3 --blend-weight 0.5 --bias-iterations 5"
+task1-predict = "python rec-sys/task1/run.py predict --model blend --epochs 3 --factors 16 --lr 0.004 --reg 0.05 --shrinkage 3 --blend-weight 0.5 --bias-iterations 5 --output rec-sys/task1/outputs/predictions_blend_tuned.txt"
+task1-predict-mf = "python rec-sys/task1/run.py predict --model mf --epochs 2 --factors 8 --lr 0.005 --reg 0.05 --output rec-sys/task1/outputs/predictions_mf_tuned.txt"
+task1-predict-baseline = "python rec-sys/task1/run.py predict --model baseline --shrinkage 5 --bias-iterations 5 --output rec-sys/task1/outputs/predictions_baseline.txt"
+task2-track1-extract = "python rec-sys/task2/scripts/extract_track1_data.py"
+task2-track1-cpp-scan = "python rec-sys/task2/scripts/scan_cpp.py rec-sys/task2/track1/solution.cpp"
+task2-track1-cpp-smoke = "python rec-sys/task2/scripts/cpp_smoke.py"
+task2-track1-cpp-benchmark = "python rec-sys/task2/track1/benchmark.py --solution rec-sys/task2/track1/solution.cpp --language cpp --benchmark-runs 1"
+task2-track1-cpp-benchmark-10 = "python rec-sys/task2/track1/benchmark.py --solution rec-sys/task2/track1/solution.cpp --language cpp --benchmark-runs 10 --run-timeout 1800"
