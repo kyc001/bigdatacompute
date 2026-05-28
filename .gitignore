@@ -21,6 +21,7 @@
 /rec-sys/task2/*.zip
 /rec-sys/task2/track1/secure_data_full_1024/*.npy
 /rec-sys/task2/track1/secure_data_full_1024/*.bin
+/rec-sys/task2/track1/secure_data_full_1024/*.npz
 
 # OS/editor noise
 .DS_Store

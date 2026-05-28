@@ -13,7 +13,7 @@ def _task_root() -> Path:
 
 
 def _add_common_model_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--model", choices=["baseline", "mf", "blend", "residual"], default="baseline")
+    parser.add_argument("--model", choices=["baseline", "mf", "blend", "residual", "ensemble"], default="baseline")
     parser.add_argument("--factors", type=int, default=24)
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--lr", type=float, default=0.008, help="learning rate for matrix factorization")

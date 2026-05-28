@@ -53,6 +53,8 @@ public:
             std::vector<float>& is = local_item_sum[tid];
             std::vector<int>& uc = local_user_count[tid];
             std::vector<int>& ic = local_item_count[tid];
+            std::vector<int>& tu = local_touched_users[tid];
+            std::vector<int>& ti = local_touched_items[tid];
 
 #pragma omp for schedule(static)
             for (int idx = 0; idx < n; ++idx) {
@@ -61,12 +63,14 @@ public:
                     continue;
                 }
 
-                const float* p_row = P + static_cast<long long>(r.user) * latent_dim;
-                const float* q_row = Q + static_cast<long long>(r.item) * latent_dim;
-                float pred = global_mean + dot(p_row, q_row);
-                pred = std::min(5.0f, std::max(0.5f, pred));
-                const float residual = r.rating - pred;
+                const float residual = r.rating - global_mean;
 
+                if (uc[r.user] == 0) {
+                    tu.push_back(r.user);
+                }
+                if (ic[r.item] == 0) {
+                    ti.push_back(r.item);
+                }
                 us[r.user] += residual;
                 is[r.item] += residual;
                 ++uc[r.user];
@@ -75,26 +79,27 @@ public:
         }
 
         for (int t = 0; t < thread_count; ++t) {
-            for (int u = 0; u < users; ++u) {
+            for (int u : local_touched_users[t]) {
                 const int c = local_user_count[t][u];
-                if (c == 0) {
-                    continue;
-                }
                 user_sum[u] += local_user_sum[t][u];
                 user_count[u] += c;
                 user_bias[u] = user_weight * user_sum[u] /
                                (static_cast<float>(user_count[u]) + user_shrink);
+                local_user_sum[t][u] = 0.0f;
+                local_user_count[t][u] = 0;
             }
-            for (int i = 0; i < items; ++i) {
+            local_touched_users[t].clear();
+
+            for (int i : local_touched_items[t]) {
                 const int c = local_item_count[t][i];
-                if (c == 0) {
-                    continue;
-                }
                 item_sum[i] += local_item_sum[t][i];
                 item_count[i] += c;
                 item_bias[i] = item_weight * item_sum[i] /
                                (static_cast<float>(item_count[i]) + item_shrink);
+                local_item_sum[t][i] = 0.0f;
+                local_item_count[t][i] = 0;
             }
+            local_touched_items[t].clear();
         }
     }
 
@@ -104,10 +109,7 @@ public:
             return global_mean;
         }
 
-        const float* p_row = P + static_cast<long long>(user_id) * latent_dim;
-        const float* q_row = Q + static_cast<long long>(item_id) * latent_dim;
-        float score = global_mean + dot(p_row, q_row) +
-                      user_bias[user_id] + item_bias[item_id];
+        float score = global_mean + user_bias[user_id] + item_bias[item_id];
         return std::min(5.0f, std::max(0.5f, score));
     }
 
@@ -143,15 +145,19 @@ private:
             local_item_sum.assign(thread_count, std::vector<float>(items, 0.0f));
             local_user_count.assign(thread_count, std::vector<int>(users, 0));
             local_item_count.assign(thread_count, std::vector<int>(items, 0));
+            local_touched_users.assign(thread_count, std::vector<int>());
+            local_touched_items.assign(thread_count, std::vector<int>());
+            for (int t = 0; t < thread_count; ++t) {
+                local_touched_users[t].reserve(std::min(users, 8192));
+                local_touched_items[t].reserve(std::min(items, 8192));
+            }
             prepared_threads = thread_count;
             return;
         }
 
         for (int t = 0; t < prepared_threads; ++t) {
-            std::fill(local_user_sum[t].begin(), local_user_sum[t].end(), 0.0f);
-            std::fill(local_item_sum[t].begin(), local_item_sum[t].end(), 0.0f);
-            std::fill(local_user_count[t].begin(), local_user_count[t].end(), 0);
-            std::fill(local_item_count[t].begin(), local_item_count[t].end(), 0);
+            local_touched_users[t].clear();
+            local_touched_items[t].clear();
         }
     }
 
@@ -173,4 +179,6 @@ private:
     std::vector<std::vector<float>> local_item_sum;
     std::vector<std::vector<int>> local_user_count;
     std::vector<std::vector<int>> local_item_count;
+    std::vector<std::vector<int>> local_touched_users;
+    std::vector<std::vector<int>> local_touched_items;
 };

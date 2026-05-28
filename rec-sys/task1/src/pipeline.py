@@ -23,10 +23,12 @@ from models import (
     MeanBaselineModel,
     Recommender,
     ResidualMatrixFactorizationModel,
+    UserResidualKNNModel,
+    WeightedEnsembleModel,
 )
 
 
-ModelName = Literal["baseline", "mf", "blend", "residual"]
+ModelName = Literal["baseline", "mf", "blend", "residual", "ensemble"]
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,65 @@ def make_model(model_name: ModelName, mf_config: MFConfig, shrinkage: float) -> 
         return ResidualMatrixFactorizationModel(
             baseline=MeanBaselineModel(shrinkage=shrinkage, iterations=mf_config.bias_iterations),
             config=mf_config,
+        )
+    if model_name == "ensemble":
+        strong_bias = {"shrinkage": 2.0, "iterations": 20}
+        return WeightedEnsembleModel(
+            [
+                (
+                    1.0,
+                    BlendedModel(
+                        baseline=MeanBaselineModel(**strong_bias),
+                        mf=MatrixFactorizationModel(
+                            config=MFConfig(
+                                factors=32,
+                                epochs=4,
+                                learning_rate=0.003,
+                                regularization=0.05,
+                                seed=42,
+                            )
+                        ),
+                        mf_weight=0.45,
+                    ),
+                ),
+                (
+                    1.0,
+                    BlendedModel(
+                        baseline=MeanBaselineModel(**strong_bias),
+                        mf=MatrixFactorizationModel(
+                            config=MFConfig(
+                                factors=24,
+                                epochs=5,
+                                learning_rate=0.0025,
+                                regularization=0.08,
+                                seed=42,
+                            )
+                        ),
+                        mf_weight=0.45,
+                    ),
+                ),
+                (
+                    1.0,
+                    MatrixFactorizationModel(
+                        config=MFConfig(
+                            factors=16,
+                            epochs=3,
+                            learning_rate=0.004,
+                            regularization=0.05,
+                            seed=123,
+                        )
+                    ),
+                ),
+                (
+                    1.0,
+                    UserResidualKNNModel(
+                        baseline=MeanBaselineModel(**strong_bias),
+                        neighbors=40,
+                        residual_shrinkage=1.0,
+                        use_absolute_similarity=True,
+                    ),
+                ),
+            ]
         )
     raise ValueError(f"unknown model {model_name!r}")
 

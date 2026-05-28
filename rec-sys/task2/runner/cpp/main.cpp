@@ -32,16 +32,12 @@ T read_one(std::ifstream& in) {
 }
 
 std::vector<Rating> read_ratings(std::ifstream& in, int rows) {
-    std::vector<float> raw(static_cast<std::size_t>(rows) * 3);
-    read_exact(in, raw.data(), raw.size());
-
     std::vector<Rating> ratings(rows);
     for (int row = 0; row < rows; ++row) {
-        const int base = row * 3;
         ratings[row] = Rating{
-            static_cast<int>(raw[base]),
-            static_cast<int>(raw[base + 1]),
-            raw[base + 2],
+            read_one<std::int32_t>(in),
+            read_one<std::int32_t>(in),
+            read_one<float>(in),
         };
     }
     return ratings;

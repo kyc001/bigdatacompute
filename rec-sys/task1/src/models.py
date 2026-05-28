@@ -190,6 +190,105 @@ class BlendedModel(Recommender):
         return self._clip(score)
 
 
+class WeightedEnsembleModel(Recommender):
+    def __init__(self, weighted_models: list[tuple[float, Recommender]]) -> None:
+        if not weighted_models:
+            raise ValueError("ensemble requires at least one model")
+        total_weight = sum(weight for weight, _ in weighted_models)
+        if total_weight <= 0.0:
+            raise ValueError("ensemble weights must sum to a positive value")
+        self.weighted_models = [(weight / total_weight, model) for weight, model in weighted_models]
+        self.min_rating = 0.0
+        self.max_rating = 100.0
+
+    def fit(self, ratings: list[Rating]) -> None:
+        for _, model in self.weighted_models:
+            model.fit(ratings)
+        first_model = self.weighted_models[0][1]
+        self.min_rating = first_model.min_rating
+        self.max_rating = first_model.max_rating
+
+    def predict(self, user_id: int, item_id: int) -> float:
+        score = sum(weight * model.predict(user_id, item_id) for weight, model in self.weighted_models)
+        return self._clip(score)
+
+
+class UserResidualKNNModel(Recommender):
+    def __init__(
+        self,
+        baseline: MeanBaselineModel,
+        neighbors: int = 40,
+        residual_shrinkage: float = 1.0,
+        use_absolute_similarity: bool = True,
+    ) -> None:
+        self.baseline = baseline
+        self.neighbors = neighbors
+        self.residual_shrinkage = residual_shrinkage
+        self.use_absolute_similarity = use_absolute_similarity
+        self.min_rating = 0.0
+        self.max_rating = 100.0
+        self.user_index: dict[int, int] = {}
+        self.item_index: dict[int, int] = {}
+        self.residual_matrix: np.ndarray | None = None
+        self.user_similarity: np.ndarray | None = None
+        self.item_users: list[np.ndarray] = []
+
+    def fit(self, ratings: list[Rating]) -> None:
+        if not ratings:
+            raise ValueError("cannot train user residual KNN on empty ratings")
+        self.baseline.fit(ratings)
+        self.min_rating = self.baseline.min_rating
+        self.max_rating = self.baseline.max_rating
+
+        users = sorted({user_id for user_id, _, _ in ratings})
+        items = sorted({item_id for _, item_id, _ in ratings})
+        self.user_index = {user_id: idx for idx, user_id in enumerate(users)}
+        self.item_index = {item_id: idx for idx, item_id in enumerate(items)}
+
+        residuals = np.zeros((len(users), len(items)), dtype=np.float32)
+        observed = np.zeros((len(users), len(items)), dtype=bool)
+        for user_id, item_id, rating in ratings:
+            user_pos = self.user_index[user_id]
+            item_pos = self.item_index[item_id]
+            residuals[user_pos, item_pos] = rating - self.baseline.predict(user_id, item_id)
+            observed[user_pos, item_pos] = True
+
+        norms = np.sqrt(np.sum(residuals * residuals, axis=1, dtype=np.float32))
+        similarity = residuals @ residuals.T
+        similarity /= norms[:, None] * norms[None, :] + 1e-6
+        np.fill_diagonal(similarity, 0.0)
+
+        self.residual_matrix = residuals
+        self.user_similarity = similarity
+        self.item_users = [np.flatnonzero(observed[:, item_pos]) for item_pos in range(len(items))]
+
+    def predict(self, user_id: int, item_id: int) -> float:
+        assert self.residual_matrix is not None
+        assert self.user_similarity is not None
+        score = self.baseline.predict(user_id, item_id)
+        user_pos = self.user_index.get(user_id)
+        item_pos = self.item_index.get(item_id)
+        if user_pos is None or item_pos is None:
+            return self._clip(score)
+
+        users_for_item = self.item_users[item_pos]
+        if users_for_item.size == 0:
+            return self._clip(score)
+
+        similarities = self.user_similarity[user_pos, users_for_item]
+        residuals = self.residual_matrix[users_for_item, item_pos]
+        if self.neighbors < similarities.size:
+            ranking_values = np.abs(similarities) if self.use_absolute_similarity else similarities
+            selected = np.argpartition(ranking_values, -self.neighbors)[-self.neighbors:]
+            similarities = similarities[selected]
+            residuals = residuals[selected]
+
+        denominator = float(np.sum(np.abs(similarities))) + self.residual_shrinkage
+        if denominator > 1e-8:
+            score += float(np.dot(similarities, residuals) / denominator)
+        return self._clip(score)
+
+
 class ResidualMatrixFactorizationModel(Recommender):
     def __init__(self, baseline: MeanBaselineModel, config: MFConfig) -> None:
         if not 0.0 <= config.residual_weight <= 2.0:
