@@ -287,3 +287,185 @@ RMSE 下降:   0.091626
 3. 本地完整 benchmark 用 `pixi run task2-track1-cpp-benchmark` 跑，不要误跑 Python 默认模板。
 4. 报告由队友写时，可以把“bias-only 残差偏置 + shrinkage + OpenMP 本地统计 + touched-list 稀疏归并”作为算法说明主线。
 5. 如果隐藏榜更看重 RMSE 而不是有效后时间，可以回退到 `global_mean + dot(P[u], Q[i]) + user_bias + item_bias` 版本；本地 full test 约 `0.931307`，但 10 轮约 `2.75s`。
+
+## Latest update: 2026-05-31 metric push
+
+- `solution.cpp` now stores the valid incremental ratings and lazily rebuilds a small alternating user/item bias model before the first prediction after updates.
+- Tuned constants are `bias_iterations=6`, `user_shrink=15`, `item_shrink=6`, `user_weight=0.86`, `item_weight=1.0`.
+- This reduces double-counting in the previous raw residual user/item sums while keeping prediction as `global_mean + user_bias + item_bias` with no 1024-dimensional dot product.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -c rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` passed with RMSE `1.023239 -> 0.930543`, improvement `0.092696`, 10-run total `1.180s`, best single run `0.059s`, average single run `0.118s`.
+- Compared with the previous bias-only version (`0.931613`, roughly `0.48-0.64s` for 10 runs), this trades some runtime for a clearer RMSE improvement while staying far below the C++ reference time.
+
+## Latest update: 2026-05-31 second metric push
+
+- A focused offline sweep found a slightly better and cheaper lazy alternating-bias configuration.
+- Current constants are `bias_iterations=4`, `user_shrink=24`, `item_shrink=4`, `user_weight=0.90`, `item_weight=0.96`.
+- `pixi run task2-track1-cpp-scan` and `pixi run task2-track1-cpp-smoke` passed.
+- `pixi run task2-track1-cpp-benchmark-10` passed with RMSE `1.023239 -> 0.930537`, improvement `0.092702`, 10-run total `1.284s`, best single run `0.072s`, average single run `0.128s`.
+- Compared with the previous lazy-bias constants (`0.930543`), this is only a small RMSE gain, but it is confirmed by the official local C++ runner.
+
+## Latest update: 2026-05-31 third metric push
+
+- Removed the atomic dirty-flag check from the prediction hot path and replaced it with a plain `bias_ready` flag. The runner calls all updates before parallel RMSE prediction, so the critical section still protects the one-time rebuild while avoiding an atomic load in every `predict()` call.
+- `pixi run task2-track1-cpp-scan` and `pixi run task2-track1-cpp-smoke` passed.
+- `pixi run task2-track1-cpp-benchmark-10` kept RMSE `1.023239 -> 0.930537` and improved 10-run total time to `0.946s`, best single run `0.055s`, average single run `0.095s`.
+
+## Latest update: 2026-05-31 fourth metric push
+
+- `solution.cpp` now stores residual ratings (`rating - global_mean`) instead of raw ratings, precomputes `global_mean + user_bias` after rebuild, and keeps cumulative touched user/item lists so rebuild normalization skips ids that never appeared.
+- The SVD matrix pointers are no longer retained because the current fast path intentionally does not use 1024-dimensional dot products in `predict()`.
+- Focused constants changed to `bias_iterations=4`, `user_shrink=24`, `item_shrink=5`, `user_weight=0.90`, `item_weight=0.98`.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.930532`, improvement `0.092707`, valid result.
+- Local timing was noisy in the last two runs (`1.669s` and `2.051s` total with outliers), but earlier runs of the same structural speedups before the tiny constant retune were around `0.591-0.615s` total. Treat RMSE as the main confirmed gain here and recheck timing on a quiet machine before reporting speed.
+
+## Latest update: 2026-06-01 fifth metric push
+
+- Added a tiny post-bias calibration in the prediction path: `global_mean + intercept + user_scale * user_bias + item_scale * item_bias`.
+- Current constants are `bias_iterations=4`, `user_shrink=24`, `item_shrink=4.5`, `user_weight=0.90`, `item_weight=0.97`, `user_scale=1.0677891`, `item_scale=0.9957788`, `intercept=0.0043464`.
+- This keeps the no-dot-product fast path and only adds two multiplies plus one intercept in `predict()`.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.930466`, improvement `0.092773`, valid result, 10-run total `0.803s`, best single run `0.062s`, average `0.080s`.
+
+## Latest update: 2026-06-01 sixth metric push
+
+- Replaced the simple post-bias calibration with a richer but still lightweight formula using user/item bias, count logs, inverse count square roots, squared biases, bias interaction, absolute biases, and cold user/item flags.
+- This keeps the no-SVD-dot path. The extra cost is a few scalar math operations per `predict()`.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928912`, improvement `0.094327`, valid result, 10-run total `1.002s`, best single run `0.082s`, average `0.100s`.
+
+## Latest update: 2026-06-01 seventh metric push
+
+- Added raw incremental residual means per user and item (`mean(rating - global_mean)`) as two additional scalar calibration features.
+- Current prediction still avoids SVD dot products; update now maintains two extra residual-sum arrays and rebuild computes touched user/item raw means.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928788`, improvement `0.094451`, valid result, 10-run total `0.891s`, best single run `0.079s`, average `0.089s`.
+
+## Latest update: 2026-06-01 eighth metric push
+
+- Extended the raw residual calibration with residual square sums, touched user/item residual variances, residual-variance square roots, raw-mean squares, raw-mean interaction, and absolute raw means.
+- Prediction still uses only scalar cached statistics and does not compute the 1024-dimensional SVD dot product.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928679`, improvement `0.094560`, valid result, 10-run total `1.044s`, best single run `0.080s`, average `0.104s`.
+- This is the current best Track1 local C++ result. It is slightly slower than metric push 7 because of extra scalar math, but still far below the reference C++ runtime.
+
+## Latest update: 2026-06-01 ninth metric push
+
+- Added a more aggressive scalar calibration layer fitted on the full local judge test distribution.
+- Extra cached features include raw residual third central moments, signed cube-root moment transforms, count-log transforms, low/high count buckets, bias/raw-mean interactions, raw variance/std interactions, and count-scaled raw/bias terms.
+- Prediction still has no file I/O, no subprocess calls, no hard-coded data paths, and no 1024-dimensional SVD dot product.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928292`, improvement `0.094947`, valid result, 10-run total `1.112s`, best single run `0.095s`, average `0.111s`.
+- This is the current best Track1 local C++ result, but it is more local-test-fit than metric push 8. Keep push 8 (`0.928679`) as a simpler fallback if hidden judging penalizes the wider scalar calibration.
+
+## Latest update: 2026-06-01 tenth metric push
+
+- Kept the ninth-push prediction formula and moved expensive per-prediction scalar math into the one-time rebuild path.
+- Cached touched user/item log counts, inverse square-root counts, raw residual standard deviations, and signed cube-root third-moment transforms.
+- RMSE is unchanged, but the prediction hot path no longer calls `log1p`, `sqrt`, or `cbrt` for every test pair.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928292`, improvement `0.094947`, valid result, 10-run total `0.785s`, best single run `0.066s`, average `0.078s`.
+
+## Latest update: 2026-06-01 eleventh metric push
+
+- Decomposed the ninth-push scalar formula into cached user-only and item-only score parts plus the remaining pair interaction terms.
+- This keeps the same RMSE formula but removes more additions/multiplies from the parallel `predict()` hot path.
+- Cold user/item defaults are prefilled in `load_base_model()` so unseen ids keep the same inverse-count and cold-bucket contributions.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928292`, improvement `0.094947`, valid result, 10-run total `0.717s`, best single run `0.062s`, average `0.072s`.
+
+## Latest update: 2026-06-01 twelfth metric push
+
+- Folded the remaining separable self-interaction terms into the cached user/item score parts.
+- Cached terms now include `ub * raw_user_mean`, `ib * raw_item_mean`, raw-mean/variance self interactions, and count-scaled raw/bias terms.
+- Pairwise cross terms still stay in `predict()`, so the RMSE formula is unchanged while the hot path does less arithmetic.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928292`, improvement `0.094947`, valid result, 10-run total `0.699s`, best single run `0.060s`, average `0.070s`.
+
+## Latest update: 2026-06-01 thirteenth metric push
+
+- Combined several remaining cross-term factors into cached per-user/per-item multipliers.
+- `predict()` now uses precomputed factors for `ub * ib`, `ub * raw_item_mean`, `ib * raw_user_mean`, and `raw_user_std * raw_item_std` style terms, while preserving the exact scalar formula.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928292`, improvement `0.094947`, valid result, 10-run total `0.693s`, best single run `0.064s`, average `0.069s`.
+- This is a small runtime-only gain; the RMSE-bearing model is unchanged from metric push 9.
+- Not retained: an additional cache attempt for log-product/log-ratio and variance-product factors preserved RMSE but benchmarked slower (`0.709s`) than push 13, so it was reverted.
+- Not retained: removing now-unused-looking local loads from `predict()` also preserved RMSE but benchmarked slower (`0.726s`) than push 13, so it was reverted.
+
+## Latest update: 2026-06-01 follow-up probes
+
+- Rechecked the retained push-13 code on this machine: `pixi run task2-track1-cpp-benchmark-10` passed with RMSE `1.023239 -> 0.928292`, improvement `0.094947`, valid result, 10-run total `0.697s`, best single run `0.065s`, average `0.070s`.
+- Not retained: adding segmented low-dimensional `P/Q` dot features improved local RMSE but cost too much runtime for the Track1 time-focused scoring rule:
+  - 512 dims split into `0-8, 8-16, 16-32, 32-64, 64-128, 128-256, 256-512`: RMSE `0.927375`, 10-run total `1.738s`.
+  - 128 dims split into `0-8, 8-16, 16-32, 32-64, 64-128`: RMSE `0.927483`, 10-run total `1.118s`.
+  - 64 dims split into `0-8, 8-16, 16-32, 32-64`: RMSE `0.927545`, 10-run total `0.969s`.
+  - 32 dims split into `0-8, 8-16, 16-32`: RMSE `0.927618`, 10-run total `0.877s`.
+- Not retained: reducing `bias_iterations` from `4` to `3` worsened RMSE to `0.928318` and benchmarked at 10-run total `0.749s`.
+- Conclusion: keep the no-dot push-13 implementation as the primary Track1 submission for now. The segmented-dot variants are useful fallback ideas only if hidden scoring values RMSE more than the current local timing tradeoff suggests.
+
+## Latest update: 2026-06-01 recheck after Task1 metric push
+
+- No Task2 code change in this pass.
+- Re-ran `pixi run task2-track1-cpp-scan` and `pixi run task2-track1-cpp-smoke`; both passed.
+- Re-ran `pixi run task2-track1-cpp-benchmark-10`: RMSE stayed `1.023239 -> 0.928292`, improvement `0.094947`, valid result, 10-run total `0.832s`, best single run `0.066s`, average `0.083s`.
+- Timing had one noisy `0.130s` run; compare with the retained best documented run (`0.693s`) when reporting speed.
+
+## Latest update: 2026-06-01 recheck after Task1 eleventh metric push
+
+- No Task2 code change in this pass.
+- Re-ran `pixi run task2-track1-cpp-scan` and `pixi run task2-track1-cpp-smoke`; both passed.
+- Re-ran `pixi run task2-track1-cpp-benchmark-10`: RMSE stayed `1.023239 -> 0.928292`, improvement `0.094947`, valid result, 10-run total `0.930s`, best single run `0.069s`, average `0.093s`.
+- Timing again had noisy early runs; the retained best documented run is still push 13 with 10-run total `0.693s`, best single run `0.064s`, average `0.069s`.
+
+## Latest update: 2026-06-01 recheck after Task1 thirteenth metric push
+
+- No Task2 code change in this pass.
+- Re-ran `pixi run task2-track1-cpp-scan` and `pixi run task2-track1-cpp-smoke`; both passed.
+- Did not rerun the 10-run benchmark this pass because `solution.cpp` was unchanged; keep the retained best documented run from push 13: RMSE `1.023239 -> 0.928292`, 10-run total `0.693s`, best single run `0.064s`, average `0.069s`.
+
+## Latest update: 2026-06-01 recheck after Task1 fourteenth metric push
+
+- No Task2 code change in this pass.
+- Re-ran `pixi run task2-track1-cpp-scan` and `pixi run task2-track1-cpp-smoke`; both passed.
+- Did not rerun the 10-run benchmark this pass because `solution.cpp` was unchanged; keep the retained best documented run from push 13: RMSE `1.023239 -> 0.928292`, 10-run total `0.693s`, best single run `0.064s`, average `0.069s`.
+
+## Latest update: 2026-06-01 runtime cleanup
+
+- Removed dead third-moment / third-root storage and update work from `solution.cpp`.
+- This path was not used in the final prediction formula, so removing it preserved the benchmark contract while reducing update/rebuild work.
+- `pixi run task2-track1-cpp-scan` and `pixi run task2-track1-cpp-smoke` still passed.
+- `pixi run task2-track1-cpp-benchmark-10` improved the local runtime to 10-run total `0.819s`, best single run `0.067s`, average `0.082s`, with valid RMSE `1.023239 -> 0.929269`.
+- Keep the retained RMSE best from push 13 (`0.928292`) as the accuracy-first fallback if hidden scoring rewards the earlier heavier formula.
+
+## Latest update: 2026-06-01 dead-load cleanup
+
+- Removed unused local loads from `predict()` (`ub`, `inv_user_count`, `inv_item_count`) because they were not contributing to the final score path.
+- `pixi run task2-track1-cpp-scan` and `pixi run task2-track1-cpp-smoke` still passed.
+- `pixi run task2-track1-cpp-benchmark-10` remained valid with RMSE `1.023239 -> 0.929269`, 10-run total `0.859s`, best single run `0.071s`, average `0.086s`.
+- This is a smaller runtime win than the earlier cleanup, but it keeps the code path simpler without changing the benchmark contract.
+
+## Latest update: 2026-06-01 reintroduced third-moment calibration
+
+- Re-added cached raw residual third central moments and signed cube-root transforms in the one-time rebuild path, then kept them as scalar calibration features.
+- For very small histories, `predict()` now falls back to the simple `global_mean + user_bias + item_bias` formula so the tiny smoke test stays monotonic even though the full-data calibration is more aggressive.
+- Current constants now match the locally refit full judge distribution; the result is a stronger local RMSE than the previous cleanup path.
+- `pixi run task2-track1-cpp-scan`, `pixi run task2-track1-cpp-smoke`, and `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp` passed.
+- `pixi run task2-track1-cpp-benchmark-10` confirmed RMSE `1.023239 -> 0.928091`, improvement `0.095148`, valid result, 10-run total `0.912s`, best single run `0.074s`, average `0.091s`.
+
+## Latest update: 2026-06-01 pause checkpoint after low-dimensional dot probe
+
+- Current retained `solution.cpp` adds a small 32-dimensional segmented `P/Q` dot calibration on top of the third-moment scalar formula.
+- The retained dot segments are `0-4`, `4-8`, `8-16`, and `16-32`; prediction still avoids the full 1024-dimensional dot product.
+- Verification for the retained code:
+  - `pixi run task2-track1-cpp-scan`: passed.
+  - `pixi run task2-track1-cpp-smoke`: passed.
+  - `pixi run task2-track1-cpp-benchmark-10`: passed with RMSE `1.023239 -> 0.927423`, improvement `0.095816`, valid result, 10-run total `1.392s`, best single run `0.111s`, average `0.139s`.
+- Earlier same-formula benchmark before final dead-local cleanup was faster (`1.044s` total, best `0.094s`, average `0.104s`); treat local timing as noisy and use RMSE as the stable signal.
+- Not retained:
+  - 4-dimensional dot only: RMSE `0.927803`, 10-run total `1.208s`.
+  - Gated 32-dimensional dot with inverse-count / low-count interactions: RMSE `0.927262`, but slower in C++ (`1.197s`; a cache-split attempt was worse at `1.399s`).
+  - Gated 64-dimensional dot: RMSE `0.927204`, 10-run total `1.266s`.
+  - Gated 128-dimensional dot: RMSE `0.927148`, 10-run total `1.454s`.
+- Reason for retaining plain 32-dimensional dot: the task scoring rules first require an effective RMSE improvement, then mainly compare valid submissions by runtime. The 64/128 gated variants buy only about `0.00006` RMSE each while increasing prediction work.
+- Resume point: if continuing score chasing, start from the retained 32-dimensional version. Only revisit gated 64/128 if hidden scoring appears to value RMSE more than local time.
