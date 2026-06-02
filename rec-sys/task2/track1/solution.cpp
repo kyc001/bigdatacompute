@@ -17,9 +17,6 @@ public:
         item_sum.assign(items, 0.0f);
         item_count.assign(items, 0);
         item_score.assign(items, global_mean);
-        item_mark.assign(items, 0);
-        touched.clear();
-        stamp = 0;
     }
 
     void update(const std::vector<Rating>& incremental_batch) {
@@ -27,29 +24,20 @@ public:
             return;
         }
 
-        ++stamp;
-        if (stamp == 0) {
-            std::fill(item_mark.begin(), item_mark.end(), 0);
-            stamp = 1;
-        }
-
-        touched.clear();
-        touched.reserve(std::min(items, static_cast<int>(incremental_batch.size())));
-
         for (const Rating& r : incremental_batch) {
             if (static_cast<unsigned>(r.user) >= static_cast<unsigned>(users) ||
                 static_cast<unsigned>(r.item) >= static_cast<unsigned>(items)) {
                 continue;
             }
-            if (item_mark[r.item] != stamp) {
-                item_mark[r.item] = stamp;
-                touched.push_back(r.item);
-            }
             item_sum[r.item] += r.rating - global_mean;
             ++item_count[r.item];
         }
 
-        for (int item : touched) {
+        for (int item = 0; item < items; ++item) {
+            if (item_count[item] == 0) {
+                item_score[item] = global_mean;
+                continue;
+            }
             const float score = global_mean +
                                 item_sum[item] /
                                     (static_cast<float>(item_count[item]) + item_shrink);
@@ -70,12 +58,9 @@ private:
 
     int users = 0;
     int items = 0;
-    int stamp = 0;
     float global_mean = 0.0f;
 
     std::vector<float> item_sum;
     std::vector<float> item_score;
     std::vector<int> item_count;
-    std::vector<int> item_mark;
-    std::vector<int> touched;
 };

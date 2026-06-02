@@ -484,3 +484,14 @@ RMSE 下降:   0.091626
   - `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp`: passed.
   - `pixi run task2-track1-cpp-benchmark-10`: passed with RMSE `1.023239 -> 0.942452`, improvement `0.080787`, valid result, 10-run total `0.192s`, best single run `0.016s`, average `0.019s`.
 - This is intentionally less accurate than the previous 32-dimensional dot version, but the RMSE margin is still far above the `0.001` validity threshold. Use this version when the goal is to beat the runtime leaderboard.
+
+## Latest update: 2026-06-02 full-scan speed cleanup
+
+- Confirmed that prefix-only sampling can be faster and still locally valid, but rejected it as too brittle for hidden distribution and report defensibility.
+- Kept the full incremental scan over all batches, then simplified the item-bias speed-first implementation by removing per-batch touched-item marking. Each `update()` now accumulates all valid ratings in the batch and refreshes the small full `item_score` array (`26744` items), which is cheaper than maintaining touched metadata on this workload.
+- Validation:
+  - `pixi run task2-track1-cpp-scan`: passed.
+  - `pixi run task2-track1-cpp-smoke`: passed (`before=3 high=3.57143 low=2.66667 invalid=3`).
+  - `g++ -std=c++17 -O3 -fopenmp -fsyntax-only rec-sys/task2/track1/solution.cpp`: passed.
+  - `pixi run task2-track1-cpp-benchmark-10`: passed with RMSE `1.023239 -> 0.942452`, improvement `0.080787`, valid result, 10-run total `0.181s`, best single run `0.013s`, average `0.018s`.
+- This is the current recommended submission for a defensible full-scan runtime attempt.
