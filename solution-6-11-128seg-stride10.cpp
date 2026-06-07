@@ -23,18 +23,12 @@ public:
         user_score.assign(users, 0.0f);
         item_score.assign(items, global_mean);
         user_prior.assign(users, 0.0f);
-        user_mark.assign(users, 0);
-        item_mark.assign(items, 0);
-        touched_users.clear();
-        touched_items.clear();
 
         total_seen = 0;
-        has_updates = false;
         if (use_segment_model) {
             precompute_user_prior();
         }
         precompute_count_luts();
-        initialize_scores();
     }
 
     void update(const std::vector<Rating>& incremental_batch) {
@@ -50,23 +44,6 @@ public:
         int* const item_counts = item_count.data();
         float* const user_sums = user_sum.data();
         int* const user_counts = user_count.data();
-        unsigned char* const item_marks = item_mark.data();
-        unsigned char* const user_marks = user_mark.data();
-        touched_items.clear();
-        touched_users.clear();
-
-        auto touch_item = [&](int item) {
-            if (!item_marks[item]) {
-                item_marks[item] = 1;
-                touched_items.push_back(item);
-            }
-        };
-        auto touch_user = [&](int user) {
-            if (!user_marks[user]) {
-                user_marks[user] = 1;
-                touched_users.push_back(user);
-            }
-        };
 
         int idx = 0;
         if ((base_offset % user_stride) == 0) {
@@ -93,48 +70,35 @@ public:
                 const float e9 = r9.rating - mean;
                 item_sums[r0.item] += e0;
                 ++item_counts[r0.item];
-                touch_item(r0.item);
                 item_sums[r1.item] += e1;
                 ++item_counts[r1.item];
-                touch_item(r1.item);
                 item_sums[r2.item] += e2;
                 ++item_counts[r2.item];
-                touch_item(r2.item);
                 item_sums[r3.item] += e3;
                 ++item_counts[r3.item];
-                touch_item(r3.item);
                 item_sums[r4.item] += e4;
                 ++item_counts[r4.item];
-                touch_item(r4.item);
                 item_sums[r5.item] += e5;
                 ++item_counts[r5.item];
-                touch_item(r5.item);
                 item_sums[r6.item] += e6;
                 ++item_counts[r6.item];
-                touch_item(r6.item);
                 item_sums[r7.item] += e7;
                 ++item_counts[r7.item];
-                touch_item(r7.item);
                 item_sums[r8.item] += e8;
                 ++item_counts[r8.item];
-                touch_item(r8.item);
                 item_sums[r9.item] += e9;
                 ++item_counts[r9.item];
-                touch_item(r9.item);
                 user_sums[r0.user] += e0;
                 ++user_counts[r0.user];
-                touch_user(r0.user);
             }
             for (; idx < n; ++idx) {
                 const Rating& r = ratings[idx];
                 const float e = r.rating - mean;
                 item_sums[r.item] += e;
                 ++item_counts[r.item];
-                touch_item(r.item);
                 if ((idx % user_stride) == 0) {
                     user_sums[r.user] += e;
                     ++user_counts[r.user];
-                    touch_user(r.user);
                 }
             }
         } else {
@@ -143,26 +107,22 @@ public:
                 const float e = r.rating - mean;
                 item_sums[r.item] += e;
                 ++item_counts[r.item];
-                touch_item(r.item);
                 if (((base_offset + idx) % user_stride) == 0) {
                     user_sums[r.user] += e;
                     ++user_counts[r.user];
-                    touch_user(r.user);
                 }
             }
         }
 
         total_seen += n;
-        has_updates = true;
-        refresh_touched_scores();
+        if (n < usual_batch_size) {
+            rebuild_scores();
+        }
     }
 
     float predict(int user_id, int item_id) {
         if (static_cast<unsigned>(user_id) >= static_cast<unsigned>(users) ||
             static_cast<unsigned>(item_id) >= static_cast<unsigned>(items)) {
-            return global_mean;
-        }
-        if (!has_updates) {
             return global_mean;
         }
         return clip_score(user_score[user_id] + item_score[item_id]);
@@ -171,6 +131,7 @@ public:
 private:
     static constexpr int expected_users = 138493;
     static constexpr int expected_items = 26744;
+    static constexpr int usual_batch_size = 100000;
     static constexpr int count_lut_limit = 65535;
     static constexpr int learned_parameter_count = 128;
     static constexpr int segment_count = 119;
@@ -183,7 +144,6 @@ private:
     int items = 0;
     float global_mean = 0.0f;
     bool use_segment_model = false;
-    bool has_updates = false;
     long long total_seen = 0;
 
     std::vector<float> user_sum;
@@ -197,10 +157,6 @@ private:
     std::vector<float> user_sum_weight;
     std::vector<float> item_count_term;
     std::vector<float> item_sum_weight;
-    std::vector<unsigned char> user_mark;
-    std::vector<unsigned char> item_mark;
-    std::vector<int> touched_users;
-    std::vector<int> touched_items;
 
     static constexpr float coef[7] = {
     3.36538887f, 0.00647326559f, 0.000930118142f, 0.163245559f, 0.0685651228f, 1.15120924f,
@@ -308,23 +264,12 @@ private:
              + coef[6] * sum / (c + item_shrink);
     }
 
-    void initialize_scores() {
+    void rebuild_scores() {
         for (int user = 0; user < users; ++user) {
             user_score[user] = user_component(user);
         }
         for (int item = 0; item < items; ++item) {
             item_score[item] = item_component(item);
-        }
-    }
-
-    void refresh_touched_scores() {
-        for (int user : touched_users) {
-            user_score[user] = user_component(user);
-            user_mark[user] = 0;
-        }
-        for (int item : touched_items) {
-            item_score[item] = item_component(item);
-            item_mark[item] = 0;
         }
     }
 };

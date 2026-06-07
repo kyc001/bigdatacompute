@@ -1,0 +1,8 @@
+Host task2-docker
+    HostName 127.0.0.1
+    Port 20022
+    User ics
+    RemoteForward 127.0.0.1:17890 127.0.0.1:17890
+    ServerAliveInterval 30
+    ServerAliveCountMax 4
+    ExitOnForwardFailure yes

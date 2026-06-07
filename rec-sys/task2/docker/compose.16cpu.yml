@@ -1,0 +1,3 @@
+services:
+  task2-ssh:
+    cpus: ${TASK2_DOCKER_CPUS:-16.0}

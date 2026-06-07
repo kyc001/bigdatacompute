@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import os
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
@@ -49,21 +51,35 @@ int main() {{
 """
 
 
+def cpp_compile_command(source: Path, output: Path) -> list[str]:
+    cxx = os.environ.get("TASK2_CPP_CXX", "g++")
+    march = os.environ.get("TASK2_CPP_MARCH", "").strip()
+    extra_flags = shlex.split(os.environ.get("TASK2_CPP_FLAGS", ""))
+
+    command = [
+        cxx,
+        "-std=c++17",
+        "-O2",
+    ]
+    if march:
+        command.append(f"-march={march}")
+    command.extend(extra_flags)
+    command.extend([
+        "-fopenmp",
+        str(source),
+        "-o",
+        str(output),
+    ])
+    return command
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="task2_cpp_smoke_") as tmp_name:
         tmp = Path(tmp_name)
         source = tmp / "smoke.cpp"
         exe = tmp / "smoke.exe"
         source.write_text(SMOKE_SOURCE, encoding="utf-8")
-        compile_cmd = [
-            "g++",
-            "-std=c++17",
-            "-O2",
-            "-fopenmp",
-            str(source),
-            "-o",
-            str(exe),
-        ]
+        compile_cmd = cpp_compile_command(source, exe)
         subprocess.run(compile_cmd, check=True)
         subprocess.run([str(exe)], check=True)
     print("C++ smoke test passed")

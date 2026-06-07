@@ -1,0 +1,28 @@
+name: bigdatacompute-task2
+
+services:
+  task2-ssh:
+    build:
+      context: ../../..
+      dockerfile: rec-sys/task2/docker/Dockerfile
+    image: bigdatacompute-task2-ssh:latest
+    container_name: bigdatacompute-task2-ssh
+    init: true
+    working_dir: /workspace
+    ports:
+      - "127.0.0.1:20022:22"
+    volumes:
+      - ../../..:/workspace
+    environment:
+      DEV_USER: ${DEV_USER:-ics}
+      DEV_PASSWORD: ${DEV_PASSWORD:-ics}
+      AUTHORIZED_KEYS: ${AUTHORIZED_KEYS:-}
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-16}
+      OMP_THREAD_LIMIT: ${OMP_THREAD_LIMIT:-16}
+      OPENBLAS_NUM_THREADS: ${OPENBLAS_NUM_THREADS:-16}
+      MKL_NUM_THREADS: ${MKL_NUM_THREADS:-16}
+      TASK2_CPP_CXX: ${TASK2_CPP_CXX:-g++}
+      TASK2_CPP_MARCH: ${TASK2_CPP_MARCH:-haswell}
+      TASK2_CPP_FLAGS: ${TASK2_CPP_FLAGS:-}
+    mem_limit: 4g
+    shm_size: 1g

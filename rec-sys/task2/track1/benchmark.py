@@ -22,6 +22,7 @@ import importlib.util
 import json
 import math
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -161,6 +162,28 @@ def default_data_dir(language: str) -> Path:
     return candidates[0]
 
 
+def cpp_compile_command(source: str, output: Path) -> list[str]:
+    cxx = os.environ.get("TASK2_CPP_CXX", "g++")
+    march = os.environ.get("TASK2_CPP_MARCH", "native").strip()
+    extra_flags = shlex.split(os.environ.get("TASK2_CPP_FLAGS", ""))
+
+    command = [
+        cxx,
+        "-O3",
+        "-std=c++17",
+    ]
+    if march:
+        command.append(f"-march={march}")
+    command.extend(extra_flags)
+    command.extend([
+        "-fopenmp",
+        source,
+        "-o",
+        str(output),
+    ])
+    return command
+
+
 def check_files(data_dir: Path, filenames: tuple[str, ...]) -> None:
     for fname in filenames:
         if not (data_dir / fname).exists():
@@ -212,16 +235,7 @@ def run_cpp_benchmark(args: argparse.Namespace, data_dir: Path, solution_path: P
         shutil.copy2(solution_path, tmp_dir / "solution.cpp")
         shutil.copy2(runner_path, tmp_dir / "main.cpp")
         exe_path = tmp_dir / "benchmark_cpp"
-        compile_cmd = [
-            "g++",
-            "-O3",
-            "-std=c++17",
-            "-march=native",
-            "-fopenmp",
-            "main.cpp",
-            "-o",
-            str(exe_path),
-        ]
+        compile_cmd = cpp_compile_command("main.cpp", exe_path)
         compile_start = time.perf_counter()
         compile_proc = subprocess.run(
             compile_cmd,

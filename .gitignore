@@ -23,6 +23,14 @@
 /rec-sys/task2/track1/secure_data_full_1024/*.bin
 /rec-sys/task2/track1/secure_data_full_1024/*.npz
 
+# Local optimization scratch files
+/reference/
+/rec-sys/task2/experiments/*.npy
+/rec-sys/task2/experiments/*.npz
+/rec-sys/task2/experiments/*.bin
+/rec-sys/task2/experiments/*.pt
+/rec-sys/task2/experiments/*.pth
+
 # OS/editor noise
 .DS_Store
 Thumbs.db
