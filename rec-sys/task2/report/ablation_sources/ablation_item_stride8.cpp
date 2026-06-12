@@ -96,7 +96,7 @@ private:
     static constexpr int learned_parameter_count = 128;
     static constexpr int segment_count = 119;
     static constexpr int user_stride = 10;
-    static constexpr int item_sample_stride = 4;
+    static constexpr int item_sample_stride = 8;
     static constexpr int item_sample_phase = 2;
     static constexpr float user_shrink = 20.0f;
     static constexpr float item_shrink = 5.0f;

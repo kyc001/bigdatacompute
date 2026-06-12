@@ -31,6 +31,23 @@
 /rec-sys/task2/experiments/*.pt
 /rec-sys/task2/experiments/*.pth
 
+# LaTeX build intermediates
+**/*.aux
+**/*.log
+**/*.out
+**/*.toc
+**/*.lof
+**/*.lot
+**/*.lol
+**/*.fls
+**/*.fdb_latexmk
+**/*.synctex.gz
+**/*.xdv
+**/*.bbl
+**/*.blg
+**/*.run.xml
+**/*-blx.bib
+
 # OS/editor noise
 .DS_Store
 Thumbs.db

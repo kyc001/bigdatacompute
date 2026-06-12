@@ -220,13 +220,12 @@ private:
         const int count = item_count[item];
         const float sum = item_sum[item];
         if (count <= count_lut_limit) {
-            return coef[0] + item_count_term[count] + sum * item_sum_weight[count];
+            return coef[0] + item_count_term[count];
         }
         const float c = static_cast<float>(count);
         return coef[0]
              + coef[2] * std::log1p(c)
-             + coef[4] / std::sqrt(c + 1.0f)
-             + coef[6] * sum / (c + item_shrink);
+             + coef[4] / std::sqrt(c + 1.0f);
     }
 
     void initialize_scores() {

@@ -1,0 +1,36 @@
+# Normalize text files across Windows host and Linux containers.
+* text=auto
+
+# Source, scripts, docs, and reproducible report data.
+*.cpp text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.c text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.tex text eol=lf
+*.bib text eol=lf
+*.csv text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.example text eol=lf
+
+# Binary artifacts and datasets should not get line-ending conversion or text diffs.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.docx binary
+*.zip binary
+*.gz binary
+*.npy binary
+*.npz binary
+*.bin binary
+*.pt binary
+*.pth binary

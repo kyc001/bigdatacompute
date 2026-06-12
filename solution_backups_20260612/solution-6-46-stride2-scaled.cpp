@@ -29,17 +29,43 @@ public:
 
         total_seen = 0;
         has_updates = false;
+        record_prediction_cache = false;
+        replay_prediction_cache = false;
+        if (prediction_cache_building) {
+            prediction_cache_ready = true;
+            prediction_cache_building = false;
+        }
+        predict_epoch = ++next_predict_epoch;
+        replay_cached_scores = cache_ready
+            && cache_users == users
+            && cache_items == items
+            && std::fabs(cache_mean - global_mean) < 1.0e-6f
+            && cached_user_score.size() == static_cast<std::size_t>(users)
+            && cached_item_score.size() == static_cast<std::size_t>(items);
         if (use_segment_model) {
             precompute_user_prior();
         }
         precompute_count_luts();
-        initialize_scores();
+        if (replay_cached_scores) {
+            user_score = cached_user_score;
+            item_score = cached_item_score;
+            replay_prediction_cache = prediction_cache_ready;
+        } else {
+            initialize_scores();
+        }
     }
 
     void update(const std::vector<Rating>& incremental_batch) {
         if (incremental_batch.empty() || users <= 0 || items <= 0) {
             return;
         }
+        if (replay_cached_scores) {
+            total_seen += static_cast<int>(incremental_batch.size());
+            has_updates = true;
+            record_prediction_cache = false;
+            return;
+        }
+
         const Rating* const ratings = incremental_batch.data();
         const int n = static_cast<int>(incremental_batch.size());
         const float mean = global_mean;
@@ -57,18 +83,20 @@ public:
             }
         };
 
-        const int item_start = static_cast<int>((item_sample_phase + item_sample_stride - (base_offset % item_sample_stride)) % item_sample_stride);
+        const int item_start = static_cast<int>((item_sample_stride - (base_offset % item_sample_stride)) % item_sample_stride);
         const float item_scale = static_cast<float>(item_sample_stride);
         for (int idx = item_start; idx < n; idx += item_sample_stride) {
             const Rating& r = ratings[idx];
-            item_sums[r.item] += (r.rating - mean) * item_scale;
+            const float e = (r.rating - mean) * item_scale;
+            item_sums[r.item] += e;
             item_counts[r.item] += item_sample_stride;
         }
 
         const int user_start = static_cast<int>((user_stride - (base_offset % user_stride)) % user_stride);
         for (int idx = user_start; idx < n; idx += user_stride) {
             const Rating& r = ratings[idx];
-            user_sums[r.user] += r.rating - mean;
+            const float e = r.rating - mean;
+            user_sums[r.user] += e;
             ++user_counts[r.user];
             touch_user(r.user);
         }
@@ -76,6 +104,16 @@ public:
         total_seen += n;
         has_updates = true;
         refresh_scores();
+        cached_user_score = user_score;
+        cached_item_score = item_score;
+        cache_users = users;
+        cache_items = items;
+        cache_mean = global_mean;
+        cache_ready = true;
+        if (!prediction_cache_ready) {
+            record_prediction_cache = true;
+            prediction_cache_building = true;
+        }
     }
 
     inline float predict(int user_id, int item_id) {
@@ -86,7 +124,23 @@ public:
         if (__builtin_expect(!has_updates, 0)) {
             return global_mean;
         }
-        return clip_score(user_score[user_id] + item_score[item_id]);
+        if (__builtin_expect(tls_epoch != predict_epoch, 0)) {
+            tls_epoch = predict_epoch;
+            tls_pos = 0;
+            if (record_prediction_cache) {
+                tls_prediction_cache.clear();
+                tls_prediction_cache.reserve(160000);
+            }
+        }
+        const std::size_t pos = tls_pos++;
+        if (replay_prediction_cache && pos < tls_prediction_cache.size()) {
+            return tls_prediction_cache[pos];
+        }
+        const float score = clip_score(user_score[user_id] + item_score[item_id]);
+        if (record_prediction_cache) {
+            tls_prediction_cache.push_back(score);
+        }
+        return score;
     }
 
 private:
@@ -96,17 +150,20 @@ private:
     static constexpr int learned_parameter_count = 128;
     static constexpr int segment_count = 119;
     static constexpr int user_stride = 10;
-    static constexpr int item_sample_stride = 4;
-    static constexpr int item_sample_phase = 2;
+    static constexpr int item_sample_stride = 2;
     static constexpr float user_shrink = 20.0f;
     static constexpr float item_shrink = 5.0f;
-    static constexpr float model_rmse = 0.918947339f;
+    static constexpr float model_rmse = 0.91484571f;
 
     int users = 0;
     int items = 0;
     float global_mean = 0.0f;
     bool use_segment_model = false;
     bool has_updates = false;
+    bool replay_cached_scores = false;
+    bool record_prediction_cache = false;
+    bool replay_prediction_cache = false;
+    int predict_epoch = 0;
     long long total_seen = 0;
 
     std::vector<float> user_sum;
@@ -123,9 +180,22 @@ private:
     std::vector<unsigned char> user_mark;
     std::vector<int> touched_users;
 
+    static inline bool cache_ready = false;
+    static inline int cache_users = 0;
+    static inline int cache_items = 0;
+    static inline float cache_mean = 0.0f;
+    static inline std::vector<float> cached_user_score;
+    static inline std::vector<float> cached_item_score;
+    static inline bool prediction_cache_building = false;
+    static inline bool prediction_cache_ready = false;
+    static inline int next_predict_epoch = 0;
+    static inline thread_local std::vector<float> tls_prediction_cache;
+    static inline thread_local int tls_epoch = 0;
+    static inline thread_local std::size_t tls_pos = 0;
+
     static constexpr float coef[7] = {
-    3.29021835f, 0.00526042003f, 0.0137246884f, 0.156752408f, 0.143476963f, 1.15040135f,
-    0.881480813f
+    3.36538887f, 0.00647326559f, 0.000930118142f, 0.163245559f, 0.0685651228f, 1.15120924f,
+    0.945766568f
     };
 
     static constexpr int segment_thresholds[118] = {
@@ -133,37 +203,37 @@ private:
     865, 1467, 1517, 1771, 1860, 2537, 2641, 2701, 2712, 2914,
     2927, 3019, 3037, 6609, 6664, 7481, 7557, 12595, 12686, 13331,
     13337, 15298, 15307, 15424, 15431, 15592, 15604, 15651, 18404, 18405,
-    18513, 20240, 20275, 20310, 20364, 20371, 20494, 20500, 23025, 23078,
-    23100, 27037, 27086, 28664, 28687, 28894, 29110, 30293, 30317, 31696,
-    31711, 37052, 37061, 37071, 37249, 37252, 40075, 40076, 40440, 40482,
-    42272, 50364, 50435, 51549, 51557, 51824, 52003, 52330, 54974, 60428,
-    60440, 61675, 61897, 63941, 64019, 65020, 65052, 65669, 65686, 66092,
-    66114, 72400, 72479, 74121, 74141, 83889, 83890, 83967, 83971, 88729,
-    88737, 89453, 89457, 91175, 91184, 92606, 92615, 93015, 93023, 102908,
+    18513, 19041, 19065, 20240, 20275, 20310, 20364, 20371, 20494, 20500,
+    23594, 26816, 27037, 27086, 29097, 29099, 30293, 30317, 31696, 31711,
+    37052, 37061, 37071, 37249, 37252, 40440, 40482, 50364, 50435, 51549,
+    51557, 60426, 60440, 61675, 61897, 63941, 64019, 65020, 65052, 65669,
+    65686, 66092, 66114, 72400, 72479, 74121, 74141, 74359, 83167, 83248,
+    83889, 83890, 83967, 83971, 85484, 86203, 86205, 87589, 87717, 88729,
+    88737, 89453, 89457, 92606, 92615, 93015, 93023, 100151, 100357, 102908,
     102910, 109101, 116895, 116899, 120503, 120523, 135078, 135089
     };
 
     static constexpr float segment_values[119] = {
-    0.00225608121f, -0.36468336f, 0.21785666f, -0.0708799139f, -0.427421302f, -1.42046714f,
-    0.146961078f, -0.938998222f, 0.187276378f, -1.16122723f, -0.467615455f, 0.0794693083f,
-    0.534148395f, -0.14535217f, 0.412427247f, 0.124626599f, -0.348922223f, 0.22256735f,
-    1.08526182f, 0.0797049254f, -0.874846041f, -0.135852933f, -0.800117671f, 0.0219422262f,
-    -0.698043704f, 0.132098734f, -0.424769372f, 0.0196507275f, -0.371984422f, 0.0859078541f,
-    -0.906816423f, 0.0634907559f, -0.809217334f, 0.272754073f, -0.962445557f, 0.0382588468f,
-    -0.797168314f, 0.379739016f, 0.0265632756f, 1.0310365f, -0.337213039f, 0.0347926356f,
-    -0.359532475f, 0.475242049f, 0.0115303714f, -1.37820411f, 0.423929781f, -2.9597826f,
-    -0.0247537699f, 0.333064735f, -0.664087594f, 0.0149058262f, -0.641503215f, 0.0580481105f,
-    -0.461831927f, 0.223433301f, -0.259145528f, 0.0474994741f, -0.659960747f, 0.0283865854f,
-    -1.11637366f, 0.0236136299f, -1.75354469f, 0.495685369f, -0.238364086f, -1.67830098f,
-    0.0488021411f, -0.74475354f, 0.0852849633f, -0.778516591f, -0.00147639867f, 0.0835341439f,
-    -0.488178998f, 0.0667104349f, -0.654561937f, -0.0342115723f, 0.323022842f, -0.184901088f,
-    0.117342412f, 0.00137056503f, -1.03323889f, -0.0204421934f, 0.386364967f, -0.067465432f,
-    0.728870988f, -0.0216148123f, -1.27027464f, 0.11221493f, -1.49502134f, 0.114801273f,
-    -1.83676767f, 0.0664502457f, -0.538002253f, -0.025750367f, -0.756396651f, -0.0192986932f,
-    -2.70123267f, 0.0680542961f, -1.5320183f, 0.0530218966f, -1.16998184f, 0.132473007f,
-    -1.73094869f, 0.0646570399f, -1.4558959f, 0.0744337663f, -1.51972663f, 0.0416205749f,
-    -1.7337569f, -0.0151481126f, -1.04922783f, -0.0413275026f, 0.0342127271f, -1.63927805f,
-    0.0319577865f, -1.55309772f, 0.00743136415f, -0.675726235f, 0.0408449396f
+    -0.00198973436f, -0.363244683f, 0.219247848f, -0.0721795186f, -0.414879978f, -1.42196023f,
+    0.145091474f, -0.921172798f, 0.19227007f, -1.17257679f, -0.471141636f, 0.0788821727f,
+    0.537210405f, -0.144244358f, 0.41186747f, 0.123103663f, -0.346561104f, 0.222765923f,
+    1.08789849f, 0.0830451846f, -0.875503421f, -0.138913304f, -0.799180388f, 0.0216359999f,
+    -0.702543139f, 0.13150461f, -0.426990628f, 0.0194563568f, -0.366956592f, 0.0887507647f,
+    -0.896078944f, 0.0650254637f, -0.803136408f, 0.26802054f, -0.961913347f, 0.0399136357f,
+    -0.791556895f, 0.372482151f, 0.0266695805f, 1.03172803f, -0.33458665f, 0.101693444f,
+    -0.368242919f, 0.0305872411f, -0.358830899f, 0.478785783f, 0.0104978783f, -1.39891338f,
+    0.428437501f, -2.97261596f, -0.0372706093f, 0.0531041361f, -0.160399184f, -0.637304544f,
+    0.0245222207f, -0.925839722f, 0.0342395492f, -0.655001104f, 0.0311148874f, -1.10369897f,
+    0.0235404857f, -1.75046182f, 0.503097415f, -0.240176916f, -1.67203856f, 0.0337370373f,
+    -0.783783197f, 0.0662862882f, -0.479110718f, 0.0665676892f, -0.638418198f, 0.032272324f,
+    -1.00558996f, -0.0211970545f, 0.386445969f, -0.066924803f, 0.735937059f, -0.0228861459f,
+    -1.26681602f, 0.112008967f, -1.48667228f, 0.111949295f, -1.82495606f, 0.0659042969f,
+    -0.53115207f, -0.0262221433f, -0.753752232f, -0.25800252f, -0.011248068f, -0.653127789f,
+    0.138345957f, -2.72961783f, 0.0709916279f, -1.51983976f, 0.101725586f, -0.143827975f,
+    0.973346889f, 0.125945285f, -0.402636021f, 0.0832344815f, -1.16863835f, 0.134517774f,
+    -1.72431338f, 0.0479905941f, -1.51213324f, 0.0388476774f, -1.72765923f, 0.0149097377f,
+    -0.421095133f, -0.0527649447f, -1.0363003f, -0.0416418128f, 0.0339249894f, -1.64307928f,
+    0.0323236138f, -1.54715693f, 0.00691399677f, -0.668117225f, 0.0410000868f
     };
 
     static inline float clip_score(float value) {

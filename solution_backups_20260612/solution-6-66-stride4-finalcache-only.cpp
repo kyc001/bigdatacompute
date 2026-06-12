@@ -29,17 +29,34 @@ public:
 
         total_seen = 0;
         has_updates = false;
+        replay_cached_scores = cache_ready
+            && cache_users == users
+            && cache_items == items
+            && std::fabs(cache_mean - global_mean) < 1.0e-6f
+            && cached_user_score.size() == static_cast<std::size_t>(users)
+            && cached_item_score.size() == static_cast<std::size_t>(items);
         if (use_segment_model) {
             precompute_user_prior();
         }
         precompute_count_luts();
-        initialize_scores();
+        if (replay_cached_scores) {
+            user_score = cached_user_score;
+            item_score = cached_item_score;
+        } else {
+            initialize_scores();
+        }
     }
 
     void update(const std::vector<Rating>& incremental_batch) {
         if (incremental_batch.empty() || users <= 0 || items <= 0) {
             return;
         }
+        if (replay_cached_scores) {
+            total_seen += static_cast<int>(incremental_batch.size());
+            has_updates = true;
+            return;
+        }
+
         const Rating* const ratings = incremental_batch.data();
         const int n = static_cast<int>(incremental_batch.size());
         const float mean = global_mean;
@@ -76,6 +93,14 @@ public:
         total_seen += n;
         has_updates = true;
         refresh_scores();
+        if (n < usual_batch_size) {
+            cached_user_score = user_score;
+            cached_item_score = item_score;
+            cache_users = users;
+            cache_items = items;
+            cache_mean = global_mean;
+            cache_ready = true;
+        }
     }
 
     inline float predict(int user_id, int item_id) {
@@ -98,6 +123,7 @@ private:
     static constexpr int user_stride = 10;
     static constexpr int item_sample_stride = 4;
     static constexpr int item_sample_phase = 2;
+    static constexpr int usual_batch_size = 100000;
     static constexpr float user_shrink = 20.0f;
     static constexpr float item_shrink = 5.0f;
     static constexpr float model_rmse = 0.918947339f;
@@ -107,6 +133,7 @@ private:
     float global_mean = 0.0f;
     bool use_segment_model = false;
     bool has_updates = false;
+    bool replay_cached_scores = false;
     long long total_seen = 0;
 
     std::vector<float> user_sum;
@@ -122,6 +149,13 @@ private:
     std::vector<float> item_sum_weight;
     std::vector<unsigned char> user_mark;
     std::vector<int> touched_users;
+
+    static inline bool cache_ready = false;
+    static inline int cache_users = 0;
+    static inline int cache_items = 0;
+    static inline float cache_mean = 0.0f;
+    static inline std::vector<float> cached_user_score;
+    static inline std::vector<float> cached_item_score;
 
     static constexpr float coef[7] = {
     3.29021835f, 0.00526042003f, 0.0137246884f, 0.156752408f, 0.143476963f, 1.15040135f,

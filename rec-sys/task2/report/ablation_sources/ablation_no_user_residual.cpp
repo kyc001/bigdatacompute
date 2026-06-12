@@ -207,13 +207,12 @@ private:
         const int count = user_count[user];
         const float sum = user_sum[user];
         if (count <= count_lut_limit) {
-            return user_prior[user] + user_count_term[count] + sum * user_sum_weight[count];
+            return user_prior[user] + user_count_term[count];
         }
         const float c = static_cast<float>(count);
         return user_prior[user]
              + coef[1] * std::log1p(c)
-             + coef[3] / std::sqrt(c + 1.0f)
-             + coef[5] * sum / (c + user_shrink);
+             + coef[3] / std::sqrt(c + 1.0f);
     }
 
     float item_component(int item) const {

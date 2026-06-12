@@ -196,8 +196,8 @@ private:
         item_sum_weight.assign(count_lut_limit + 1, 0.0f);
         for (int count = 0; count <= count_lut_limit; ++count) {
             const float c = static_cast<float>(count);
-            user_count_term[count] = coef[1] * std::log1p(c) + coef[3] / std::sqrt(c + 1.0f);
-            item_count_term[count] = coef[2] * std::log1p(c) + coef[4] / std::sqrt(c + 1.0f);
+            user_count_term[count] = 0.0f;
+            item_count_term[count] = 0.0f;
             user_sum_weight[count] = coef[5] / (c + user_shrink);
             item_sum_weight[count] = coef[6] / (c + item_shrink);
         }
@@ -211,8 +211,6 @@ private:
         }
         const float c = static_cast<float>(count);
         return user_prior[user]
-             + coef[1] * std::log1p(c)
-             + coef[3] / std::sqrt(c + 1.0f)
              + coef[5] * sum / (c + user_shrink);
     }
 
@@ -224,8 +222,6 @@ private:
         }
         const float c = static_cast<float>(count);
         return coef[0]
-             + coef[2] * std::log1p(c)
-             + coef[4] / std::sqrt(c + 1.0f)
              + coef[6] * sum / (c + item_shrink);
     }
 

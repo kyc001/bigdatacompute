@@ -14,7 +14,7 @@ public:
         users = std::max(0, u_size);
         items = std::max(0, i_size);
         global_mean = mean;
-        use_segment_model = (users == expected_users && items == expected_items);
+        use_segment_model = false;
 
         user_sum.assign(users, 0.0f);
         item_sum.assign(items, 0.0f);
