@@ -39,16 +39,16 @@ plt.rcParams.update({
 
 
 LABELS = {
-    "final": "最终方法",
+    "final": "最终静态先验",
     "dense_item": "完整物品统计",
     "stride16": "激进采样",
     "item_only": "Item-only基线",
     "constant": "无增量预测",
-    "no_user_prior": "去用户分段先验",
-    "no_count_terms": "去计数特征",
+    "no_user_prior": "去用户静态先验",
+    "no_count_terms": "去计数形状项",
     "no_user_residual": "去用户残差",
     "no_item_residual": "去物品残差",
-    "no_prior_no_count": "去先验和计数",
+    "no_prior_no_count": "去先验和计数形状",
     "stride2": "物品stride=2",
     "stride8": "物品stride=8",
 }
@@ -162,7 +162,7 @@ def tradeoff_scatter():
     ax.set_title("有效方法的精度-时间分布")
     ax.set_xlabel("5 次平均 10-run 总耗时 / 秒")
     ax.set_ylabel("更新后 RMSE")
-    ax.set_xlim(0.114, 0.143)
+    ax.set_xlim(0.106, 0.144)
     ax.set_ylim(0.912, 0.946)
     polish(ax)
     save(fig, "tradeoff_scatter.png")
@@ -187,7 +187,7 @@ def sampling_sweep():
     ax1.tick_params(axis="y", colors=BLUE)
     ax2.tick_params(axis="y", colors=ORANGE)
     ax1.set_ylim(0.912, 0.933)
-    ax2.set_ylim(0.110, 0.145)
+    ax2.set_ylim(0.104, 0.145)
     ax1.grid(axis="y", color=GRID, linewidth=0.75, alpha=0.55)
     ax1.spines["top"].set_visible(False)
     ax2.spines["top"].set_visible(False)
@@ -236,7 +236,7 @@ def repeat_sequence():
     ax.set_xlabel("重复测量编号")
     ax.set_ylabel("10-run 总耗时 / 秒")
     ax.set_xticks(x)
-    ax.set_ylim(0.080, 0.172)
+    ax.set_ylim(0.055, 0.172)
     ax.legend(frameon=False, ncol=2, loc="upper right")
     polish(ax)
     save(fig, "repeat_sequence.png")

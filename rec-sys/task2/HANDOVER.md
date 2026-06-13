@@ -1938,3 +1938,87 @@ RMSE 下降:   0.091626
 - Validation:
   - `git check-attr` confirms `.cpp`, `.tex`, and `.csv` use `text` with `eol=lf`;
   - `git check-attr` confirms `.png` and `.pdf` have `text` unset and `diff` unset.
+
+## 2026-06-13 Update: speed-only optimization audit, no retained code change
+
+- User requested continued speed optimization of the current Track1 solution with 5 repeated measurements, no RMSE regression, and no previously discussed update hack.
+- Benchmark protocol used in Docker only:
+  - container: `bigdatacompute-task2-ssh`;
+  - compile once with the C++ runner using `g++ -O3 -std=c++17 -march=haswell -fopenmp`;
+  - run 5 independent benchmark invocations;
+  - each invocation uses 10 internal update+predict runs and reports the 10-run total.
+- Current retained solution baseline in this session:
+  - first current run: totals `0.116059`, `0.121187`, `0.103948`, `0.150011`, `0.129968`, mean `0.124235s`, RMSE `0.918947`;
+  - same original code rerun from the report final source: totals `0.097586`, `0.110103`, `0.103887`, `0.070557`, `0.074254`, mean `0.091277s`, RMSE `0.918947`;
+  - final retained code after reverting all candidates: totals `0.118747`, `0.141138`, `0.123567`, `0.176009`, `0.148734`, mean `0.141639s`, RMSE `0.918947`.
+- Rejected candidates, all with unchanged RMSE `0.918947` but worse or unstable 5-repeat time:
+  - inline score refresh inside sampled update loops: mean `0.108705s`; rejected because immediate original-code rerun averaged `0.091277s`;
+  - manually expanded `refresh_scores()` with local pointers and branch hints: mean `0.109900s`;
+  - branchless `std::min/std::max` clipping: mean `0.134110s`;
+  - removing predict out-of-range fallback: mean `0.139364s`;
+  - shrinking count LUT from `65535` to `8191`: mean `0.120600s`;
+  - 4-way manual unroll of item/user sampling loops: mean `0.138055s`;
+  - lazy score refresh with atomic readiness and OpenMP critical: mean `0.131159s`; rejected also because it risks being interpreted as relying on the runner's update-before-predict batching pattern.
+- Conclusion:
+  - no candidate satisfied "same RMSE and faster than the retained current solution" under the 5-repeat rule;
+  - `rec-sys/task2/track1/solution.cpp` was restored to the original retained implementation;
+  - further speed gains likely require a different fitted model that reduces update work while keeping RMSE at or below `0.918947`, rather than local C++ micro-optimizations.
+
+## 2026-06-13 Update: retained architecture change, P/Q static prior + simple residual
+
+- User clarified that stride/phase sweeps are not useful and requested a real architecture change aimed at lower timed work.
+- Rejected architecture attempts:
+  - `P/Q` static prior with the full previous dynamic count-shape model improved RMSE to about `0.917912`, but benchmarked slower because item static prior added work to the per-batch item refresh path;
+  - replacing dynamic user residual entirely with static user prior was faster in structure but not accurate enough, best offline RMSE about `0.923202`;
+  - static user and static item prior with item-only incremental residual also failed, best offline RMSE about `0.923778`.
+- Retained architecture:
+  - fixed the existing accepted sampling rule: `user_stride=10`, `item_sample_stride=4`, `item_sample_phase=2`;
+  - moved a small static prior into `load_base_model()` using the first `8` user-factor dimensions and first `4` item-factor dimensions;
+  - simplified the timed dynamic model to only user/item shrink residual terms:
+    `user_prior + coef_user * user_sum/(count+20)` and `coef0 + item_prior + coef_item * item_sum/(count+5)`;
+  - removed the dynamic `log1p(count)` and inverse-square-root count-shape terms from refresh scoring;
+  - kept the prediction hot path as two score-array reads plus clipping;
+  - did not change thread settings and did not use cross-run update/prediction caching.
+- Parameter accounting:
+  - learned scalar values are `coef[3] + user_pq_weights[8] + item_pq_weights[4] + segment_values[113] = 128`;
+  - segment thresholds are deterministic boundaries emitted by the fitting procedure, consistent with the previous segment-table style.
+- New helper scripts:
+  - `rec-sys/task2/experiments/fit_p_prior_simple_residual_128.py`;
+  - `rec-sys/task2/experiments/generate_simple_residual_solution_128.py`;
+  - generated candidate: `rec-sys/task2/experiments/simple_residual_solution_128.cpp`.
+- Offline fit summary:
+  - best simple residual model: `user_dim=8`, `item_dim=4`, `user_segments=113`;
+  - offline RMSE `0.917877582`, better than the previous retained `0.918947`.
+- Docker 5-repeat timing before replacement:
+  - candidate totals `0.121049`, `0.134646`, `0.131083`, `0.074505`, `0.134082`, mean `0.119073s`, RMSE `0.917878`;
+  - immediately rerun old current solution totals `0.139626`, `0.134797`, `0.141868`, `0.121977`, `0.132332`, mean `0.134120s`, RMSE `0.918947`.
+- Formal replacement:
+  - copied the generated simple-residual architecture into `rec-sys/task2/track1/solution.cpp`;
+  - Docker scan passed.
+- Final Docker 5-repeat validation after replacement:
+  - totals `0.065403`, `0.126031`, `0.104636`, `0.119812`, `0.133808`;
+  - mean `0.109938s`;
+  - RMSE `1.023239 -> 0.917878`;
+  - valid result.
+
+## 2026-06-13 Update: report revised for final static-prior result
+
+- User requested the report be revised to adopt the latest retained result as final and explicitly state that all results were measured in the local environment.
+- Updated `rec-sys/task2/report/track1_report.tex`:
+  - final method is now described as `P/Q` prefix static prior plus sampled shrinkage residual calibration;
+  - retained the old method optimization narrative as an iteration path: full SVD update, residual bias, count-shape calibration, sampled statistics, and final static-prior simplification;
+  - updated all final RMSE/time values to the latest local 5-repeat measurements: RMSE `0.917878`, 10-run mean `0.1099s`, median `0.1198s`;
+  - added a clear statement that report figures/tables use the current local containerized environment and do not use remote or historical cross-environment timings;
+  - removed stale old-final values and stale wording that treated the count-shape model as the final method.
+- Updated `rec-sys/task2/report/make_figures.py` and regenerated all PNG figures from `ablation_benchmark_results.csv`.
+- Manually inspected all six generated figures:
+  - `main_method_runtime.png`;
+  - `tradeoff_scatter.png`;
+  - `sampling_sweep.png`;
+  - `ablation_rmse_delta.png`;
+  - `repeat_sequence.png`;
+  - `complexity_reduction.png`.
+- Validation:
+  - compiled twice with XeLaTeX;
+  - final PDF page count is 9 pages;
+  - extracted PDF text has no local paths, no internal solution snapshot names, no backup names, no `.cpp` file names, no English `Table`/`Figure` references, and no stale old-final values.
