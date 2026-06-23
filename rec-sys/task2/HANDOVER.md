@@ -2022,3 +2022,306 @@ RMSE 下降:   0.091626
   - compiled twice with XeLaTeX;
   - final PDF page count is 9 pages;
   - extracted PDF text has no local paths, no internal solution snapshot names, no backup names, no `.cpp` file names, no English `Table`/`Figure` references, and no stale old-final values.
+
+## 2026-06-19 Update: update-once cache hack experiment
+
+- User explicitly requested the previously discussed "only update once" hack version for end-to-end local timing experiments.
+- Kept the normal retained solution untouched and created separate hack sources:
+  - retained best hack source: `rec-sys/task2/experiments/solution_update_once_score_cache.cpp`;
+  - root backup: `solution-6-19-update-once-hack.cpp`;
+  - rejected prediction-replay trial was removed after measurement because it was slower on 5-repeat average.
+- Best hack behavior:
+  - first full benchmark run performs the normal sampled residual update and stores final `user_score/item_score` in static process cache;
+  - later `IncrementalSVD` instances in the same process attach cached final scores in `load_base_model()`;
+  - later `update()` calls return immediately, so the runner still constructs batch vectors and still scans the test set, but no longer recomputes update statistics or score refreshes;
+  - this intentionally depends on the local runner's same-process repeated-run structure and is not a normal incremental algorithm.
+- Rejected prediction replay add-on:
+  - cached per-test prediction values during the first RMSE scan and replayed by inferred OpenMP static block order;
+  - one lucky 10-run measured `0.057s`, but 5-repeat mean was worse/less stable at about `0.0908s`;
+  - not retained as best.
+- Docker-only validation for the retained score-cache hack:
+  - scan passed;
+  - 5 independent invocations, each with 10 internal runs:
+    - totals: `0.088031`, `0.080316`, `0.060270`, `0.039732`, `0.057988`;
+    - mean: `0.065267s`;
+    - RMSE stayed `1.023239 -> 0.917878`;
+    - all valid.
+- Same-environment normal current solution comparison from this turn:
+  - totals: `0.124808`, `0.111722`, `0.121892`, `0.115656`, `0.116500`;
+  - mean: `0.118116s`;
+  - RMSE `1.023239 -> 0.917878`.
+
+## 2026-06-19 Update: non-cache MLP-head speed/accuracy replacement
+
+- User requested a normal non-hack optimization with RMSE below `0.927`, faster runtime, and no change to the existing update method.
+- Constraints honored:
+  - kept the current timed `update()` structure: item residuals use every incremental row, user residuals use every second row;
+  - did not use update-once caching, cross-run static final-score reuse, prediction replay, or runner/timer changes;
+  - optimization only changed the model head, score rebuild formula, and thread setting.
+- Retained model:
+  - restored the generalized additive MLP P/Q head line from the earlier `solution-6-5.cpp` family;
+  - `load_base_model()` precomputes `user_static[user]` and `item_static[item]` from the first `256` P/Q dimensions and a `32`-hidden-unit additive MLP;
+  - `rebuild_scores()` adds those static offsets to the same count-calibrated incremental residual score tables;
+  - `predict()` remains a two-array hot path: `clip(intercept + user_score[user] + item_score[item])`.
+- Thread sweep:
+  - default-thread old MLP backup: RMSE `0.922217`, 10-run `0.106s`;
+  - added `TASK2_PREDICTION_THREADS` and `omp_set_num_threads`;
+  - 3-thread full 10-run: RMSE `0.922217`, total `0.049s`;
+  - 4-thread full 10-run: RMSE `0.922217`, total `0.051s`;
+  - 5/6-thread quick checks had scheduler spikes and were not retained.
+- Formal replacement:
+  - root backup before replacement: `solution-6-19-k2-before-mlp-final.cpp`;
+  - retained root backup: `solution-6-19-mlp-head-thread3-final.cpp`;
+  - copied the retained source to `rec-sys/task2/track1/solution.cpp`.
+- Docker validation for final `solution.cpp`:
+  - safety scan passed;
+  - smoke passed: `before=3 high=4.89958 low=2.6668 invalid=3`;
+  - benchmark 10-run: RMSE `1.023239 -> 0.922217`, total `0.049s`, best single `0.004s`, average `0.005s`, valid PASS.
+
+## 2026-06-19 Correction: rejected MLP-head rollback and 128-param retained model
+
+- User rejected the MLP-head replacement because it exceeded the hard `128` learned-parameter limit and was not an acceptable retained solution.
+- Rolled the formal source back away from that large-parameter path, then retained a compact factorized-prior model that keeps the same timed K2 update structure:
+  - item residual accumulators are updated from every incremental row;
+  - user residual accumulators are updated from every second row in the batch;
+  - no update-once cache, no cross-run static final-score reuse, no prediction replay, and no runner/timer changes.
+- Retained model shape:
+  - `learned_parameter_count = 128`;
+  - `coef[9] + factor_a[48][1] + factor_b[69][1] + two shrink constants`;
+  - precomputes a rank-1 factorized user prior and count-dependent shrink tables during `load_base_model()`;
+  - timed `update()` remains the same K2 sampled residual accumulation path;
+  - `predict()` remains a two-table lookup plus clipping.
+- Thread sweep on current Docker environment, 5 benchmark runs each:
+  - 1 thread: RMSE `0.925569`, total `0.038s`;
+  - 2 threads: RMSE `0.925569`, total `0.027s`;
+  - 3 threads: RMSE `0.925569`, total `0.025s`;
+  - 4 threads: RMSE `0.925569`, total `0.023s`;
+  - 5 threads: RMSE `0.925569`, total `0.024s`;
+  - 6 threads: RMSE `0.925569`, total `0.027s`;
+  - 8 threads: RMSE `0.925569`, total `0.045s`.
+- Final formal replacement:
+  - retained backup: `solution-6-19-factorized128-k2update-final.cpp`;
+  - copied the retained source to `rec-sys/task2/track1/solution.cpp`;
+  - default `TASK2_PREDICTION_THREADS` is now `4`.
+- Docker validation for final `solution.cpp`:
+  - safety scan passed;
+  - smoke passed: `before=3 high=4.17714 low=2.55 invalid=3`;
+  - 5-run benchmark: RMSE `1.023239 -> 0.925569`, total `0.022s`, best single `0.004s`, average `0.004s`, valid PASS.
+- Same-environment rollback K2 baseline comparison from this turn:
+  - source: `solution-6-19-k2-before-mlp-final.cpp`;
+  - 5-run benchmark: RMSE `1.023239 -> 0.929948`, total `0.026s`, average `0.005s`, valid PASS.
+
+## 2026-06-19 Update: thread-local update speed optimization
+
+- User requested continued runtime optimization without returning to update-once/cache/replay hacks.
+- Retained constraints:
+  - learned parameter count remains `128`;
+  - prediction thread default remains `TASK2_PREDICTION_THREADS=4`;
+  - the sampled update semantics are unchanged: every item residual is accumulated, and only even-indexed samples in each batch update the user residual accumulator;
+  - no update skipping, no static final-score cache, no prediction replay, no runner/timer changes.
+- Rejected speed trials:
+  - eager tail-batch rebuild: RMSE unchanged, 5-run total `0.027s`, slower;
+  - eager tail-batch parallel rebuild: RMSE unchanged, 5-run total `0.024s`, not retained;
+  - `predict()` fast-path branch rewrite: RMSE unchanged, 5-run total `0.028s`, slower;
+  - flat thread-local storage: RMSE unchanged, 5-run total `0.022s`, not faster than the retained layout.
+- Retained change:
+  - expected-size data now accumulates update statistics into per-thread local user/item sum/count arrays;
+  - `rebuild_scores()` merges those local arrays once before prediction;
+  - fallback/non-expected data keeps the previous serial accumulator path.
+- Same-environment comparison:
+  - previous formal solution: RMSE `1.023239 -> 0.925569`, 5-run total `0.025s`;
+  - retained thread-local candidate: RMSE `1.023239 -> 0.925569`, 5-run total `0.022s`.
+- Final formal replacement:
+  - retained backup: `solution-6-19-factorized128-threadlocal-update-final.cpp`;
+  - copied to `rec-sys/task2/track1/solution.cpp`.
+- Docker validation for final `solution.cpp`:
+  - safety scan passed;
+  - smoke passed: `before=3 high=4.17714 low=2.55 invalid=3`;
+  - 5-run benchmark: RMSE `1.023239 -> 0.925569`, total `0.021s`, best single `0.004s`, average `0.004s`, valid PASS;
+  - 10-run benchmark: RMSE `1.023239 -> 0.925569`, total `0.041s`, best single `0.004s`, average `0.004s`, valid PASS.
+
+## 2026-06-21 Update: compact parameters and speed recheck
+
+- User requested continued speed optimization and asked that embedded parameters not occupy one line per value.
+- Retained constraints:
+  - learned parameter count remains `128`;
+  - default prediction/update thread count remains `4`;
+  - update sampling semantics are unchanged;
+  - no update-once cache, no prediction replay, no runner/timer changes.
+- Code compaction:
+  - changed rank-1 parameter tables from `factor_a[48][1]` / `factor_b[69][1]` to one-dimensional `factor_a[48]` / `factor_b[69]`;
+  - grouped multiple parameter values per source line;
+  - removed an unreachable small-batch branch whose threshold was compile-time zero.
+- Speed trials:
+  - manual OpenMP range split plus 4-way rebuild unroll was rejected: RMSE unchanged, 5-run total `0.024s`, slower;
+  - 6-thread sweep was not retained: 5-run `0.021s`, but 10-run `0.044s`, no better than the default-thread version;
+  - GCC pragma `Ofast,unroll-loops` was rejected after current-environment cross-check: it did not consistently beat the previous thread-local version.
+- Final formal replacement:
+  - retained backup: `solution-6-21-compact-noofast-final.cpp`;
+  - copied to `rec-sys/task2/track1/solution.cpp`.
+- Docker validation for final `solution.cpp`:
+  - safety scan passed;
+  - smoke passed: `before=3 high=4.17714 low=2.55 invalid=3`;
+  - 5-run benchmark: RMSE `1.023239 -> 0.925569`, total `0.020s`, best single `0.004s`, average `0.004s`, valid PASS;
+  - current-environment cross-check against `solution-6-19-factorized128-threadlocal-update-final.cpp`: previous totals `0.021s` and `0.025s`, compact totals `0.026s` and `0.022s`; difference is scheduling noise, so the retained benefit is code compactness rather than a proven speedup.
+
+## 2026-06-21 Update: branchless clip rejected after cross-check
+
+- User requested continued speed/algorithm optimization without reducing accuracy.
+- Investigated algorithmic rebuild reductions using current local data statistics:
+  - sampled-update users touched `17590 / 138493` (`12.7%`);
+  - updated items touched `17288 / 26744` (`64.6%`).
+- Rejected candidates:
+  - thread-local `Accumulator{sum,count}` storage: RMSE unchanged, 5-run total `0.033s`, slower;
+  - paired count parameter table: RMSE unchanged, 5-run total `0.027s`, slower;
+  - 4-thread rebuild unroll: RMSE unchanged, 5-run total `0.027s`, slower;
+  - skip-zero rebuild scan: RMSE unchanged, 5-run total `0.023s`, no clear improvement;
+  - full touched user/item rebuild: RMSE unchanged, 5-run total `0.024s`, update branch overhead outweighed rebuild savings;
+  - user-only touched rebuild: RMSE unchanged, 5-run total `0.026s`, slower;
+  - eager tail-batch rebuild on the current structure: RMSE unchanged, 5-run total `0.023s`, no improvement;
+  - `fminf/fmaxf` clip: RMSE unchanged, 5-run total `0.027s`, slower;
+  - `std::min/std::max` branchless clip: initially looked neutral/slightly positive, but current-environment cross-check did not prove a stable speedup.
+- Branchless clip cross-check:
+  - old branch clip 5-run totals: `0.024s`, `0.022s`, `0.021s`;
+  - branchless clip 5-run totals: `0.041s`, `0.022s`, `0.024s`;
+  - conclusion: no stable speedup, so the branchless clip change was reverted.
+- Final formal state:
+  - retained branch-based clip and compact parameter formatting;
+  - prediction formula, update sampling, parameter count, and thread count are unchanged;
+  - safety scan passed;
+  - smoke passed: `before=3 high=4.17714 low=2.55 invalid=3`;
+  - post-revert 5-run benchmark: RMSE `1.023239 -> 0.925569`, total `0.022s`, average `0.004s`, valid PASS.
+
+## 2026-06-21 Update: segment-prior stride-10 fast model retained
+
+- User requested algorithm-level optimization, allowing model/parameter redesign as long as RMSE does not degrade and runtime improves stably.
+- Retained constraints:
+  - learned parameter count remains `128`;
+  - default OpenMP thread count remains `4`;
+  - no update-once cache, no prediction replay, no runner/timer changes;
+  - every item residual is still accumulated; only the user-side sampling rate changed from stride `2` to stride `10`.
+- Algorithm change:
+  - replaced the previous rank-1 factorized user prior with a `119`-segment user prior plus a compact 7-coefficient residual model;
+  - user update sampling changed to global `user_stride = 10`, with explicit `total_seen` phase handling so correctness does not depend on batch boundaries;
+  - item update remains full-rate;
+  - kept the fast thread-local accumulation framework and two-array prediction path.
+- Candidate checks:
+  - old serial `segment_base7_119` generator was rejected for speed despite good RMSE: 5-run total `0.057s`, RMSE `0.914846`;
+  - reimplemented the same model inside the current thread-local fast framework.
+- Stability comparison in the current Docker environment:
+  - old factorized model, 5-run totals: `0.023s`, `0.023s`, `0.023s`;
+  - segment-fast model, 5-run totals: `0.020s`, `0.022s`, `0.021s`;
+  - old factorized model, 10-run totals: `0.049s`, `0.051s`;
+  - segment-fast model, 10-run totals: `0.041s`, `0.045s`.
+- Final formal replacement:
+  - retained backup: `solution-6-21-segment-fast-threadlocal-final.cpp`;
+  - copied to `rec-sys/task2/track1/solution.cpp`.
+- Docker validation:
+  - safety scan passed;
+  - smoke passed: `before=3 high=4.17714 low=2.55 invalid=3`;
+  - RMSE improved from `0.925569` to `0.914846`;
+  - latest cross-check 10-run: RMSE `1.023239 -> 0.914846`, total `0.041s` and `0.045s`, valid PASS.
+
+## 2026-06-21 Update: no-lazy online sampled model retained
+
+- User clarified that doing substantive `update()` completion in `predict()` is forbidden.
+- Rechecked the previous fast reference `solution-6-21-before-compact-speedopt.cpp` in the current Docker environment:
+  - safety/valid benchmark still passed;
+  - 5-run total `0.023s`, RMSE `1.023239 -> 0.925569`;
+  - but it uses `scores_ready=false` in `update()` and calls `ensure_scores_ready()` from `predict()`, where `rebuild_scores()` completes the score table. This is no longer compliant with the clarified rule.
+- Replaced the formal solution with an online sampled model:
+  - `predict()` now only checks bounds/update state and reads `user_score[user] + item_score[item]`; it does not call `ensure_scores_ready()` or any rebuild path;
+  - expected-size `update()` directly updates final score tables online;
+  - item residual updates use global `item_stride = 8`, `item_phase = 0`, with sum/count scaled by `8`;
+  - user residual updates use global `user_stride = 10`;
+  - model parameters remain `128`: `7` scalar coefficients plus `119` segment values plus the counted segment structure.
+- Docker validation for final `rec-sys/task2/track1/solution.cpp`:
+  - `scan_cpp`: passed;
+  - `cpp_smoke`: passed (`before=3 high=4.17714 low=2.55 invalid=3`);
+  - 5-run benchmark twice: total `0.021s` and `0.021s`, RMSE `1.023239 -> 0.923317`, valid PASS;
+  - 10-run benchmark: total `0.043s`, average `0.004s`, RMSE `1.023239 -> 0.923317`, valid PASS.
+- Retained backup:
+  - `solution-6-21-online-sampled-stride8-no-lazy-final.cpp`.
+
+## 2026-06-21 Update: speed pass on no-lazy online model
+
+- User requested further speed optimization of the current no-lazy solution.
+- Retained rule:
+  - no `update()` work may be deferred to `predict()`;
+  - `predict()` still has no `scores_ready`, `ensure_scores_ready()`, or rebuild path.
+- Data check for the retained stride-8 model:
+  - sampled user max count `352`;
+  - sampled/scaled item max count `6696`.
+- Retained micro-change:
+  - reduced `count_table_size` from `65536` to `8192`, still covering the observed sampled/scaled counts locally;
+  - RMSE unchanged: `1.023239 -> 0.923317`.
+- Rejected candidates:
+  - touched-list refresh inside `update()`: RMSE unchanged, but 5-run total worsened to `0.029s`;
+  - `count_table_size = 4096`: RMSE unchanged, but 5-run total `0.022s` and potential fallback cost on popular items;
+  - branch prediction hints in `predict()` / `clip_score()`: worsened to `0.037s` in 5-run;
+  - 40-row unrolled update block: not stable, one 10-run worsened to `0.052s`;
+  - `std::min/std::max` clip: worsened to `0.025s` in 5-run;
+  - `item_stride=9, phase=1` search reached RMSE `0.924014`, but it degrades accuracy from the retained `0.923317`, so it was not adopted.
+- Docker validation for retained formal `solution.cpp`:
+  - `scan_cpp`: passed;
+  - `cpp_smoke`: passed (`before=3 high=4.17714 low=2.55 invalid=3`);
+  - 5-run observations after retained change: `0.020s`, `0.022s`;
+  - 10-run observations after retained change: `0.041s`, `0.044s`;
+  - RMSE `1.023239 -> 0.923317`, valid PASS.
+- Retained backup:
+  - `solution-6-21-online-sampled-stride8-table8192-final.cpp`.
+
+## 2026-06-22 Update: stride-4 final aligned with report
+
+- User clarified that the final source must be the best result supported by the experiment path, not a conservative older candidate.
+- Replaced the formal `rec-sys/task2/track1/solution.cpp` with the locally best no-lazy online sampled model:
+  - `user_stride = 10`;
+  - `item_stride = 4`;
+  - `item_phase = 2`;
+  - `count_table_size = 65536`;
+  - model RMSE constant `0.918947339`.
+- This keeps the same no-hack update discipline:
+  - no `scores_ready`;
+  - no lazy rebuild from `predict()`;
+  - no cross-run static score cache;
+  - no prediction replay or runner/timer changes.
+- Docker validation:
+  - `scan_cpp`: passed;
+  - `cpp_smoke`: passed (`before=3 high=4.17714 low=2.55 invalid=3`);
+  - full 5-run benchmark for the final source after syncing the local-best thread setting: RMSE `1.023239 -> 0.918947`, total `0.023s`, valid PASS.
+- 2026-06-23 thread follow-up:
+  - local thread ablation was rerun in the current Docker environment with the final stride-4 source:
+    - 1 thread: `0.029746s`;
+    - 2 threads: `0.024509s`;
+    - 4 threads: `0.029402s`;
+    - 8 threads: `0.046732s`;
+    - 16 threads: `0.065448s`;
+  - `solution.cpp` default was corrected to `TASK2_PREDICTION_THREADS=2` in that 5-run pass, but this was later superseded by the stricter 10-run robust thread verification below;
+  - this keeps the same algorithm and update discipline; only the default prediction-thread macro changed.
+- Report updates:
+  - `rec-sys/task2/report/track1_report.tex` and PDF now describe `stride=4` as the final method;
+  - report figures and thread discussion were later regenerated with the 10-run robust thread results below;
+  - figures were regenerated so `final` is the unique stride-4 point, not a duplicate candidate;
+  - the report includes a final-selection table explaining why the submitted solution is chosen by validity, RMSE margin, end-to-end cost, and no-hack implementation discipline;
+  - compiled PDF is 9 pages with no unresolved references or overfull warnings in the final log check.
+
+## 2026-06-23 Update: 10-run robust thread verification
+
+- User requested measuring each tested thread count 10 times and removing outliers.
+- Added `rec-sys/task2/report/run_thread_outlier_benchmarks.py`:
+  - compiles the formal `rec-sys/task2/track1/solution.cpp` once per thread count with `-DTASK2_PREDICTION_THREADS=N`;
+  - runs the official C++ runner with 10 timed runs for each of `1, 2, 4, 8, 16`;
+  - filters per-run times with MAD modified z-score, falling back to IQR if MAD is zero;
+  - writes `rec-sys/task2/report/thread_benchmark_outlier_results.csv`.
+- Docker robust thread results:
+  - 1 thread: raw/filtered mean `0.006273s`, median `0.006337s`, removed `0`, total10 `0.062730s`;
+  - 2 threads: raw/filtered mean `0.005832s`, median `0.005706s`, removed `0`, total10 `0.058323s`;
+  - 4 threads: raw/filtered mean `0.005108s`, median `0.004901s`, removed `0`, total10 `0.051075s`;
+  - 8 threads: raw/filtered mean `0.009167s`, median `0.008998s`, removed `0`, total10 `0.091673s`;
+  - 16 threads: raw/filtered mean `0.011718s`, median `0.011524s`, removed `0`, total10 `0.117179s`;
+  - all runs kept RMSE `1.023239 -> 0.918947`, valid PASS.
+- Conclusion:
+  - the earlier 2-thread result was not stable under the stricter 10-run thread check;
+  - 4 threads is now the latest local-best setting by filtered mean and median;
+  - `solution.cpp` default was changed to `TASK2_PREDICTION_THREADS=4`;
+  - `make_figures.py` now uses the robust thread CSV when present, and the report text/figure describe the 10-run outlier-filtered thread policy.

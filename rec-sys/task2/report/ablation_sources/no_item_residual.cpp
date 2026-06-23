@@ -5,7 +5,7 @@
 #include <omp.h>
 
 #ifndef TASK2_PREDICTION_THREADS
-#define TASK2_PREDICTION_THREADS 4
+#define TASK2_PREDICTION_THREADS 2
 #endif
 
 struct Rating {
@@ -174,7 +174,7 @@ private:
             user_count_score_table[i] = coef[1] * log_count + coef[3] / std::sqrt(count + 1.0f);
             item_count_score_table[i] = coef[2] * log_count + coef[4] / std::sqrt(count + 1.0f);
             user_sum_weight_table[i] = count > 0.0f ? coef[5] / (count + user_shrink) : 0.0f;
-            item_sum_weight_table[i] = count > 0.0f ? coef[6] / (count + item_shrink) : 0.0f;
+            item_sum_weight_table[i] = 0.0f;
         }
     }
 
@@ -240,8 +240,7 @@ private:
             return item_count_score_table[count] + sum * item_sum_weight_table[count];
         }
         const float c = static_cast<float>(count);
-        return coef[2] * std::log1p(c) + coef[4] / std::sqrt(c + 1.0f) +
-               (c > 0.0f ? coef[6] * sum / (c + item_shrink) : 0.0f);
+        return coef[2] * std::log1p(c) + coef[4] / std::sqrt(c + 1.0f);
     }
 
     void rebuild_scores() {

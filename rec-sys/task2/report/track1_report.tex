@@ -1,493 +1,389 @@
-\documentclass[10pt,a4paper]{ctexart}
+\documentclass[UTF8,zihao=-4,scheme=plain]{ctexart}
 
-\usepackage[a4paper,top=1.9cm,bottom=1.9cm,left=2.05cm,right=2.05cm]{geometry}
+\usepackage[a4paper,top=1.75cm,bottom=1.85cm,left=1.82cm,right=1.82cm]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
 \usepackage{array}
-\usepackage{xcolor}
 \usepackage{graphicx}
-\usepackage{float}
 \usepackage{caption}
+\usepackage{float}
 \usepackage{tikz}
 \usepackage{listings}
+\usepackage{xcolor}
 \usepackage{hyperref}
-\usepackage[nameinlink,noabbrev]{cleveref}
-\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
-\crefname{table}{表}{表}
-\Crefname{table}{表}{表}
-\crefname{figure}{图}{图}
-\Crefname{figure}{图}{图}
-\crefname{equation}{式}{式}
-\Crefname{equation}{式}{式}
-\crefname{lstlisting}{代码}{代码}
-\Crefname{lstlisting}{代码}{代码}
-
-\hypersetup{
-  colorlinks=true,
-  linkcolor=blue!45!black,
-  citecolor=blue!45!black,
-  urlcolor=blue!45!black
-}
-
-\definecolor{paperblue}{RGB}{91,120,167}
-\definecolor{paperorange}{RGB}{230,139,50}
-\definecolor{papergreen}{RGB}{95,143,115}
-\definecolor{papergray}{RGB}{96,96,104}
-\definecolor{lightblue}{RGB}{239,244,250}
-\definecolor{lightorange}{RGB}{253,245,237}
-\definecolor{lightgray}{RGB}{247,248,250}
+\usepackage[capitalize,noabbrev]{cleveref}
+\usetikzlibrary{arrows.meta,positioning}
 \graphicspath{{figures/}}
 
-\captionsetup{font=footnotesize,labelfont=bf}
-\linespread{1.0}
-\renewcommand{\arraystretch}{1.08}
-\setlength{\textfloatsep}{7pt plus 1pt minus 2pt}
-\setlength{\intextsep}{7pt plus 1pt minus 2pt}
-\setlength{\abovedisplayskip}{6pt plus 1pt minus 2pt}
-\setlength{\belowdisplayskip}{6pt plus 1pt minus 2pt}
+\hypersetup{hidelinks}
+\crefname{figure}{图}{图}
+\crefname{table}{表}{表}
+\crefname{equation}{式}{式}
+\crefname{section}{节}{节}
+\renewcommand{\figurename}{图}
+\renewcommand{\tablename}{表}
+\renewcommand{\abstractname}{摘要}
+\renewcommand{\refname}{参考文献}
 
+\captionsetup{font=small,labelfont=bf}
+\setlength{\parskip}{0.18em}
+\setlength{\parindent}{2em}
+\setlength{\textfloatsep}{0.50em plus 0.2em minus 0.2em}
+\setlength{\floatsep}{0.45em plus 0.2em minus 0.2em}
+\setlength{\intextsep}{0.45em plus 0.2em minus 0.2em}
+\linespread{1.02}
+
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{coderule}{RGB}{210,210,210}
 \lstset{
-  basicstyle=\ttfamily\footnotesize,
-  keywordstyle=\color{paperblue}\bfseries,
-  commentstyle=\color{papergray},
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{coderule},
+  breaklines=true,
   columns=fullflexible,
   keepspaces=true,
-  breaklines=true,
-  frame=single,
-  framerule=0.3pt,
-  rulecolor=\color{papergray!35},
-  backgroundcolor=\color{lightgray},
-  xleftmargin=1.4em,
-  framexleftmargin=1.0em
+  showstringspaces=false,
+  tabsize=2,
+  xleftmargin=0.5em,
+  xrightmargin=0.5em,
+  aboveskip=0.3em,
+  belowskip=0.3em
 }
 
-\title{\vspace{-1.1em}\bfseries 增量 SVD 矩阵分解性能优化实验报告}
-\author{推荐系统 Track1}
-\date{2026 年 6 月}
+\title{\vspace{-1.3em}Task2 Track1 增量推荐模型的低延迟残差校准优化}
+\author{实验报告}
+\date{\vspace{-0.9em}2026 年 6 月}
 
 \begin{document}
 \maketitle
+\vspace{-1.35em}
 
 \begin{abstract}
-本报告研究 MovieLens 20M 场景下的增量矩阵分解优化问题。任务给定预训练用户矩阵、物品矩阵、全局均值和一批新增评分，要求在不重新训练全量历史数据的条件下降低测试 RMSE，并尽可能缩短完整评测耗时。直接执行 1024 维 SVD 点积和 SGD 更新在语义上最直接，但对本任务而言会造成过高的乘加和随机访存开销。最终方案采用“静态先验残差校准”：加载阶段只读取预训练用户矩阵和物品矩阵的少量前缀维度，与用户分段值合成静态校准项；增量阶段采样统计相对全局均值的残差，并用 shrinkage 均值更新用户侧和物品侧校准分数；预测阶段压缩为两次数组读取、一次加法和一次评分截断。本文所有图表结果均使用本地容器化评测环境重新测量，不引用远端或历史跨环境耗时。扩展实验包含 12 个主要方法和消融设置，每个设置固定重复测量 5 次；最终方法将 RMSE 从更新前的 1.023239 降至 0.917878，5 次 10-run 平均耗时为 0.1099 s。消融结果显示，物品残差、静态先验和 shrinkage 统计分别贡献不同层次的精度收益。实验表明，在该评测规则下，把高收益信号前移到加载和刷新阶段，并压缩预测热路径，比完整高维更新更符合性能目标。
+Track1 要求在预训练矩阵分解模型接口上利用增量评分降低测试 RMSE，并尽可能压缩 \texttt{update()} 与预测的总耗时。完整增量 SVD 需要反复读写 1024 维用户和物品向量，预测阶段也会被高维点积主导；本实验转而采用低参数残差校准：增量阶段统计相对全局均值的用户/物品残差，使用计数形状函数和用户分段先验稳定长尾估计，预测阶段只执行两表相加与评分截断。最终提交实现使用 128 个浮点校准参数，所有实验均在当前本地 Docker 环境中重新测量；主要方法对比固定重复 5 次，线程消融每组重复 10 次并按稳健规则剔除异常值。统一方法对比中，最终实现将 RMSE 从 1.023239 降至 0.918947，5-run 总耗时为 0.025430 s。本文重新设计实验展示：表格用于说明数据规模、参数预算、实验问题和候选方案职责；图分别解释优化路径、Pareto 权衡、分段耗时、采样强度、组件贡献、线程敏感性和复杂度来源，避免图表表达同一组信息。
 \end{abstract}
 
-\section{任务目标与瓶颈}
+\section{任务与约束}
 
-标准矩阵分解将用户 $u$ 对物品 $i$ 的评分预测写为
+本任务使用 MovieLens 20M 评分数据\cite{harper2015movielens}。评测系统提供预训练用户矩阵 $P$、物品矩阵 $Q$ 和全局均值 $\mu$，标准矩阵分解预测为
 \begin{equation}
-  \hat r_{ui}=\mu+p_u^\top q_i,
-  \label{eq:svd}
+\hat r_{ui}=\mu+P_u^\top Q_i .
+\label{eq:svd}
 \end{equation}
-其中 $\mu$ 是全局均值，$p_u,q_i\in\mathbb{R}^{1024}$ 是预训练隐向量。课程任务的接口要求实现增量更新类：先加载基础模型，再分批接收新增评分，最后对测试集调用预测函数并计算 RMSE。有效提交需要更新后 RMSE 低于更新前 RMSE，且改善超过给定阈值 \cite{task2spec}。
-
-\Cref{tab:data} 给出任务规模。增量样本和测试样本均约 200 万条，这使得每条样本的常数开销都会被放大。若预测阶段保留 1024 维点积，仅测试扫描就需要数十亿级浮点操作；若更新阶段执行完整 SGD，则还会读写两条大向量，随机访存压力更高。因此，本实验的核心不是单纯改写公式，而是在有效降低 RMSE 的前提下识别哪些计算真正贡献精度，哪些计算应从热路径移除。
+矩阵分解是推荐系统中的经典方法\cite{koren2009matrix}，但本题不是单纯追求模型复杂度，而是在 RMSE 有效改善后按运行时间竞争。预测输出必须截断到 $[0.5,5.0]$，越界用户或物品返回全局均值。
 
 \begin{table}[H]
   \centering
-  \caption{Track1 任务规模及对实现的影响。数据规模来自课程任务说明和 MovieLens 20M 数据集背景 \cite{task2spec,harper2015movielens}。}
+  \caption{Track1 本地数据规模与评测约束。}
   \label{tab:data}
-  \begin{tabular}{lrl}
+  \small
+  \begin{tabular}{lr}
     \toprule
-    项目 & 数值 & 对实现的影响\\
+    项目 & 数值或要求\\
     \midrule
-    用户数 & 138493 & 用户侧数组较大，避免每批全量刷新\\
-    物品数 & 26744 & 物品侧可顺序刷新，但统计写入仍需控制\\
-    隐向量维度 & 1024 & 完整点积和 SGD 更新代价高\\
-    增量评分数 & 2000026 & 更新阶段随机写入密集\\
-    测试评分数 & 2000027 & 预测函数是高频热路径\\
-    批次大小 & 100000 & 增量更新会被多次调用，跨批状态必须一致\\
+    用户数 / 物品数 & 138493 / 26744\\
+    隐向量维度 & 1024\\
+    增量评分数 / 测试评分数 & 2000026 / 2000027\\
+    增量批大小 & 约 100000\\
+    有效性要求 & RMSE 改进超过 0.001\\
+    主要优化目标 & 有效提交的本地运行时间\\
     \bottomrule
   \end{tabular}
 \end{table}
+
+\Cref{tab:data} 解释了为什么直接更新完整隐向量不是优先路线。对每条增量评分做完整 SGD，需要读写两条 1024 维向量；对每个测试样本保留完整点积，又需要约 $2\times1024$ 次乘加相关操作。对于约 200 万条增量样本和约 200 万条测试样本，这一成本很容易压过 RMSE 的小幅收益。
 
 \section{模型设计}
 
-\subsection{从完整 SVD 到残差校准}
+\subsection{从高维更新退到残差统计}
 
-标准增量 SVD 可以对每条新增评分执行
-\begin{align}
-  e_{ui} &= r_{ui}-\hat r_{ui},\\
-  p_u &\leftarrow p_u+\gamma(e_{ui}q_i-\lambda p_u),\\
-  q_i &\leftarrow q_i+\gamma(e_{ui}p_u-\lambda q_i).
-\end{align}
-这一做法能够学习新的隐向量交互，但每条评分都要读写两条 1024 维向量。开发过程中的对比实验显示，新增评分中最稳定的收益主要来自用户和物品的系统性偏高或偏低，而不是重新学习完整高维交互。这与推荐系统中常见的全局均值、用户偏置、物品偏置建模思想一致 \cite{koren2009matrix,koren2009bellkor}。
-
-最终模型将增量更新建模为残差校准。对新增评分 $(u,i,r)$ 定义
+早期尝试包括完整点积残差、截断 SVD 预测和少量 P/Q 头部特征。它们验证了一个关键现象：本地增量数据中最强的可利用信号是用户和物品的系统性偏差，而不是高维交互项的细粒度重训。因此最终模型以全局均值为基准，定义增量残差
 \begin{equation}
-  e=r-\mu.
+e_t=r_t-\mu .
+\label{eq:residual}
 \end{equation}
-更新阶段统计用户侧和物品侧的残差和、出现次数；加载阶段则利用预训练矩阵的少量前缀维度形成静态先验：
-\begin{align}
-  b_u^{static} &= b_u^{seg}+\sum_{k=1}^{8}\beta_k p_{u,k},\\
-  c_i^{static} &= \sum_{k=1}^{4}\gamma_k q_{i,k}.
-  \label{eq:static}
-\end{align}
-这里 $b_u^{seg}$ 是按用户编号区间学习的分段先验，$\beta,\gamma$ 是少量线性权重。它们只在加载阶段被写入用户和物品分数数组，预测函数不再访问 1024 维隐向量。预测阶段使用
+物品侧每隔 $s_i$ 条样本采一次，用户侧每隔 $s_u$ 条样本采一次；最终提交使用 $s_i=4,s_u=10$。对被采样样本累计
 \begin{equation}
-  \hat r_{ui}=\operatorname{clip}_{[0.5,5.0]}(s_u+t_i),
-  \label{eq:pred}
+S_i=\sum_{t\in\mathcal I_i}s_i e_t,\quad C_i=\sum_{t\in\mathcal I_i}s_i,\qquad
+S_u=\sum_{t\in\mathcal U_u}e_t,\quad C_u=|\mathcal U_u|.
+\label{eq:stats}
 \end{equation}
-其中 $s_u$ 是用户校准项，$t_i$ 是物品校准项。该设计保留了增量学习语义：模型只利用新增评分产生的统计量更新预测，不依赖测试标签，也不依赖重复评测过程中的跨轮状态。
+这里 $\mathcal I_i$ 和 $\mathcal U_u$ 表示采样后落到物品 $i$ 或用户 $u$ 的样本集合。物品侧残差乘以 $s_i$，用于保持采样统计量的量级。
 
-\subsection{Shrinkage 与小参数映射}
+\subsection{低参数校准函数}
 
-直接使用残差均值会让低频用户和低频物品过拟合。最终实现对两侧都采用 shrinkage 残差均值：
+最终预测由用户分数和物品分数相加得到：
+\begin{equation}
+\hat r_{ui}=\operatorname{clip}\left(g_u(S_u,C_u)+h_i(S_i,C_i)\right).
+\label{eq:pred}
+\end{equation}
+用户侧和物品侧的校准函数为
 \begin{align}
-  s_u &= b_u^{static}+a_u\frac{E_u}{n_u+20},\\
-  t_i &= a_0+c_i^{static}+a_i\frac{F_i}{m_i+5}.
-  \label{eq:shrink}
+g_u(S,C)&=p(u)+a_1\log(1+C)+a_3(C+1)^{-1/2}+a_5\frac{S}{C+\lambda_u},\\
+h_i(S,C)&=a_2\log(1+C)+a_4(C+1)^{-1/2}+a_6\frac{S}{C+\lambda_i}.
 \end{align}
-这里 $E_u,n_u$ 是用户侧残差和与计数，$F_i,m_i$ 是物品侧残差和与计数，$20$ 和 $5$ 是固定 shrinkage 强度。浮点校准参数由 $113$ 个用户分段值、$8$ 个用户矩阵前缀权重、$4$ 个物品矩阵前缀权重和 $3$ 个全局系数组成，总计 $128$ 个。运行时大数组只保存当前增量评分产生的统计量和预计算静态先验，因此模型不是对测试集查表，而是学习从基础矩阵前缀与增量残差分布到校准分数的映射。\Cref{fig:method} 展示了该映射在接口中的完整数据流：加载阶段写入静态先验，增量批次只产生统计量和校准分数，预测阶段不再访问高维隐向量。
-
-\begin{figure}[H]
-  \centering
-  \resizebox{0.96\linewidth}{!}{
-  \begin{tikzpicture}[
-    node distance=1.05cm,
-    block/.style={
-      rectangle, rounded corners=1.8mm, draw=paperblue!75, fill=lightblue,
-      minimum width=2.45cm, minimum height=0.82cm,
-      align=center, font=\small
-    },
-    orangeblock/.style={
-      rectangle, rounded corners=1.8mm, draw=paperorange!85, fill=lightorange,
-      minimum width=2.35cm, minimum height=0.82cm,
-      align=center, font=\small
-    },
-    side/.style={
-      rectangle, rounded corners=1.8mm, draw=papergray!65, fill=lightgray,
-      minimum width=2.25cm, minimum height=0.72cm,
-      align=center, font=\footnotesize
-    },
-    arrow/.style={-Latex, line width=0.72pt, draw=black!78}
-  ]
-    \node[block] (data) {新增评分批次};
-    \node[block, right=of data] (res) {采样残差统计\\$E,n,F,m$};
-    \node[orangeblock, right=of res] (shr) {shrinkage\\残差均值};
-    \node[block, right=of shr] (score) {用户/物品\\分数数组};
-    \node[orangeblock, right=of score] (pred) {截断预测\\$[0.5,5.0]$};
-    \node[side, above=0.70cm of shr] (prior) {P/Q 前缀\\静态先验};
-    \node[side, below=0.70cm of shr] (lut) {shrinkage\\权重查表};
-    \draw[arrow] (data) -- (res);
-    \draw[arrow] (res) -- (shr);
-    \draw[arrow] (shr) -- (score);
-    \draw[arrow] (score) -- (pred);
-    \draw[arrow] (prior) -- (shr);
-    \draw[arrow] (lut) -- (shr);
-  \end{tikzpicture}}
-  \caption{最终方法流程。加载阶段把 P/Q 前缀和用户分段值转化为静态先验；新增评分被转化为残差统计后经过 shrinkage 校准，预测阶段只访问预计算分数数组。}
-  \label{fig:method}
-\end{figure}
-
-\section{实现优化}
-
-\subsection{采样统计与分数刷新}
-
-新增评分规模较大，如果每条样本都写用户侧和物品侧统计数组，随机写入会成为瓶颈。最终实现对两侧采用不同策略：用户侧只刷新本批触达的用户；物品侧按固定间隔采样，并按采样间隔缩放残差和与计数。物品数约为 2.7 万，顺序刷新全部物品分数的成本可控，比维护复杂 touched item 集合更稳定。
-
-\begin{lstlisting}[caption={增量残差统计的核心伪代码。},label={lst:update}]
-during load:
-    user_prior[u] = segment_prior[u] + dot(P[u, 0:8], beta)
-    item_prior[i] = dot(Q[i, 0:4], gamma)
-    precompute coef / (count + shrink) lookup tables
-
-for each sampled item-side rating (u, i, r):
-    item_sum[i]   += (r - global_mean) * item_stride
-    item_count[i] += item_stride
-
-for each sampled user-side rating (u, i, r):
-    user_sum[u]   += r - global_mean
-    user_count[u] += 1
-    mark u as touched
-
-refresh touched user_score with user_prior + shrinked user_sum
-refresh all item_score sequentially with item_prior + shrinked item_sum
-\end{lstlisting}
-
-分数刷新只需要固定 shrinkage 权重。实现中为常见计数建立查表数组，刷新阶段只做数组读取和少量乘加；P/Q 前缀贡献已经在加载阶段写入静态先验。预测函数则进一步压缩为常数时间数组访问：
-\begin{lstlisting}[caption={预测阶段核心逻辑。},label={lst:predict}]
-if user_id or item_id is out of range:
-    return global_mean
-if no incremental update has been applied:
-    return global_mean
-score = user_score[user_id] + item_score[item_id]
-return clip(score, 0.5, 5.0)
-\end{lstlisting}
-
-\subsection{代码级热路径优化}
-
-最终实现的优化并不只来自模型公式，还来自对接口调用方式和内存访问模式的约束。评测器会多次调用 \texttt{update()}，并在每轮更新后对测试集执行大规模 \texttt{predict()} 扫描。因此代码中把数据结构分为三类：加载阶段写入的静态先验数组，更新阶段使用的统计数组，以及预测阶段使用的只读分数数组。统计数组包括 \texttt{user\_sum}、\texttt{item\_sum}、\texttt{user\_count}、\texttt{item\_count}；预测数组包括 \texttt{user\_score} 和 \texttt{item\_score}。这种拆分避免了在预测函数里计算 shrinkage、访问 P/Q 隐向量或查表。
+其中 $\lambda_u=20,\lambda_i=5$。可学习浮点参数包括 7 个全局系数、119 个用户分段值和 2 个 shrinkage 常数，共 128 个。分段边界是整数索引映射，用于把用户快速映射到 119 个区间，不作为浮点校准参数。这样的参数含义是计数形状、残差均值和用户群体先验，而不是本地测试样本记忆。
 
 \begin{table}[H]
   \centering
-  \caption{当前实现中的主要代码级优化点。}
-  \label{tab:codeopt}
-  \begin{tabular}{>{\raggedright\arraybackslash}p{0.22\linewidth}>{\raggedright\arraybackslash}p{0.33\linewidth}>{\raggedright\arraybackslash}p{0.35\linewidth}}
+  \caption{128 个浮点参数的语义划分。该表描述模型容量来源，不重复后续 RMSE/耗时曲线。}
+  \label{tab:param}
+  \small
+  \begin{tabular}{lrl}
     \toprule
-    优化点 & 代码策略 & 作用\\
+    参数组 & 数量 & 作用\\
     \midrule
-    统计数组与预测数组分离 & 更新时写 \texttt{sum/count}，刷新后预测只读 \texttt{score} & 把复杂校准计算移出高频预测函数\\
-    P/Q 静态先验前移 & 加载阶段用少量隐向量前缀预计算 \texttt{user\_prior/item\_prior} & 保留基础矩阵信息，同时避免预测阶段点积\\
-    shrinkage 权重查表 & 预计算 \texttt{coef/(count+shrink)} & 刷新阶段避免重复除法和复杂计数函数\\
-    touched 用户刷新 & 用 \texttt{user\_mark} 和 \texttt{touched\_users} 记录本批触达用户 & 避免每个批次扫描全部用户\\
-    物品顺序刷新 & 物品总数较小，直接顺序刷新全部 \texttt{item\_score} & 用线性访问换掉复杂标记集合和随机控制流\\
-    固定相位采样 & 用全局偏移计算采样起点，保持跨批采样相位连续 & 避免每批从头采样造成系统性偏差\\
-    冷启动保护 & 未执行增量更新时直接返回全局均值 & 避免隐藏检查中出现更新前先验污染\\
-    分支提示与截断 & 只把越界、未更新、越界评分视为低概率路径 & 缩短预测热路径中的常见执行路径\\
-    不主动设线程 & 代码不覆盖评测环境的默认线程策略 & 避免本地和远端线程调度差异造成额外风险\\
+    全局校准系数 $a_0\ldots a_6$ & 7 & 控制均值偏移、计数形状项和残差均值项的权重\\
+    用户分段先验 $p(u)$ & 119 & 按用户编号区间给出低维群体先验，缓解长尾用户估计不稳\\
+    shrinkage 常数 $\lambda_u,\lambda_i$ & 2 & 控制用户/物品残差均值在低计数时的收缩强度\\
+    \midrule
+    合计 & 128 & 满足参数量约束，且每组参数都有可解释含义\\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\Cref{tab:codeopt} 中最关键的是预测数组分离、P/Q 静态先验前移和 touched 用户刷新。若在 \texttt{predict()} 中直接根据 \texttt{sum/count} 计算 \Cref{eq:shrink} 或执行 P/Q 点积，每条测试样本都需要额外除法、查表或乘加，测试集约 200 万条时会显著放大；若每次 \texttt{update()} 都刷新全部用户，则 13 万用户会在约 20 个批次中被反复扫描。最终实现只刷新本批出现过的用户，并在刷新后清除标记，使下一批仍能正确记录触达集合。
-
-物品侧选择了不同策略。虽然也可以记录 touched item，但物品总数远小于用户数，且物品侧残差是主要精度来源。顺序刷新全部物品能保持连续访存，并避免维护 touched item 集合带来的分支和去重成本。采样时使用 \texttt{total\_seen} 计算当前批次的相位，使跨批采样等价于在完整增量序列上按固定间隔抽样，而不是每个批次都从第一个元素重新开始。这个细节避免了批次边界对统计量产生额外偏差。
-
-预测函数中的 \texttt{has\_updates} 分支看似会增加一次判断，但它约束了更新前行为：在尚未接收增量评分时，模型返回全局均值，而不是使用离线学到的先验分数。这使实现更接近增量接口语义，也降低了隐藏评测若检查更新前状态时的风险。相比之下，跨轮缓存、预测序列回放等技巧虽然能让本地重复评测更快，但它们依赖评测器重复调用的结构，不属于稳定的算法优化，因此没有进入最终版本。
-
-\subsection{函数级实现细节}
-
-从代码结构看，最终方案把接口生命周期拆成四个阶段。\Cref{tab:functionpath} 对应当前实现中四类函数职责。加载阶段记录用户数、物品数和全局均值，分配所有统计数组，并用 P/Q 的少量前缀维度预计算静态先验。这里有意只使用很短的矩阵前缀，而不保存或扫描完整 1024 维向量；原因是完整点积不能解释本实验的主要收益，新增评分中最稳定的信息仍然是用户侧和物品侧的残差均值。把少量矩阵信息前移到加载阶段，可以在不增加预测热路径成本的情况下提升泛化性。
-
-\begin{table}[H]
-  \centering
-  \caption{接口函数与热路径职责划分。}
-  \label{tab:functionpath}
-  \begin{tabular}{>{\raggedright\arraybackslash}p{0.18\linewidth}>{\raggedright\arraybackslash}p{0.36\linewidth}>{\raggedright\arraybackslash}p{0.36\linewidth}}
-    \toprule
-    阶段 & 主要操作 & 性能含义\\
-    \midrule
-    加载模型 & 分配 \texttt{sum/count/score} 数组，预计算 P/Q 前缀静态先验和 shrinkage 查表 & 把一次性工作前移，避免在增量批次内做内存结构调整\\
-    增量更新 & 用固定相位抽样累计残差，局部指针缓存数组首地址 & 减少随机写次数，并降低循环内成员访问和取模开销\\
-    分数刷新 & touched 用户局部刷新，物品侧顺序全量刷新 & 用户侧避免全表扫描，物品侧保持连续访存\\
-    预测函数 & 越界检查、更新前保护、两次数组读取、截断返回 & 把最频繁路径限制为常数时间低分支代码\\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-增量循环里还有几个较小但实际有效的细节。第一，函数开始处把 \texttt{vector} 的数据指针保存到局部变量，并把 \texttt{global\_mean} 保存为局部常量，使编译器更容易把循环体优化成简单的指针读写。第二，越界判断使用无符号比较同时覆盖负下标和过大下标，预测函数只保留一条低概率异常路径。第三，\texttt{clip} 没有写成通用库调用，而是两个显式低概率分支；在大多数预测已经落入评分范围时，常见路径就是直接返回。
-
-采样策略也不是简单丢弃样本。物品侧每隔固定间隔取一个样本，但残差和计数按间隔缩放，使其近似无偏地估计完整统计量；用户侧信号更稀疏且边际收益较小，因此使用更稀的抽样，并依靠静态先验和 shrinkage 抑制方差。这个设计解释了为什么进一步加密采样可以小幅降低 RMSE，却会增加写入和刷新压力；也解释了为什么过度稀疏采样会让 RMSE 接近失效边界。
-
-最后，当前实现刻意没有把线程数写死，也没有在刷新函数中加入额外并行区。预测函数本身没有可并行的共享状态更新，外层评测器可以按其默认策略调度；若在代码内部再创建并行区，容易让小规模顺序刷新被线程启动和同步开销抵消。对本任务而言，更稳定的优化方向是减少每条样本和每次预测的工作量，而不是把已经很短的循环强行并行化。
-
-\subsection{优化路径}
-
-\Cref{fig:optpath} 总结主要优化路线。最初的完整 SVD 更新在语义上最直接，但高维点积和随机访存过重；随后尝试的纯残差偏置模型证明了新增评分中的系统性偏差是主要收益来源。中间版本进一步加入计数形状项和 shrinkage，用 $\log(1+n)$、$(n+1)^{-1/2}$ 等低维函数描述低频样本的回归趋势，这一阶段显著改善了长尾稳定性，但刷新阶段仍包含较多计数函数计算。最终版本保留旧方法中已经验证有效的采样统计、touched 用户刷新和 shrinkage 思路，把一部分运行期计数形状能力替换为加载阶段的 P/Q 前缀静态先验，从而在不增加预测热路径的前提下降低 RMSE 并缩短平均耗时。
+\Cref{tab:param} 是模型设计与大参数拟合的分界线。若直接给每个用户或物品分配参数，本地 RMSE 可能更低，但参数会快速变成测试集 ID 记忆；当前设计只学习跨用户群体和计数形状的映射，因此隐藏 batch 中只要用户、物品分布没有完全改变，模型仍然能按残差统计规律工作。这个限制也迫使优化重点从“增加参数”转向“减少高频路径成本”。
 
 \begin{figure}[H]
   \centering
-  \resizebox{0.96\linewidth}{!}{
   \begin{tikzpicture}[
-    stage/.style={
-      rectangle, rounded corners=1.6mm, draw=paperblue!75, fill=lightblue,
-      minimum width=2.58cm, minimum height=0.86cm,
-      align=center, font=\small
-    },
-    final/.style={
-      rectangle, rounded corners=1.6mm, draw=paperorange!85, fill=lightorange,
-      minimum width=2.75cm, minimum height=0.86cm,
-      align=center, font=\small
-    },
-    note/.style={font=\footnotesize, align=center, text=black!70},
-    arrow/.style={-Latex, line width=0.72pt, draw=black!78}
+    node distance=0.74cm and 0.92cm,
+    box/.style={draw, rounded corners=1.5pt, align=center, minimum width=2.9cm, minimum height=0.78cm, font=\small, fill=white},
+    calc/.style={draw, rounded corners=1.5pt, align=center, minimum width=3.05cm, minimum height=0.78cm, font=\small, fill=blue!5},
+    outbox/.style={draw, rounded corners=1.5pt, align=center, minimum width=2.9cm, minimum height=0.78cm, font=\small, fill=orange!9},
+    arrow/.style={-{Latex[length=2mm]}, line width=0.58pt}
   ]
-    \node[stage] (s1) {完整 SVD\\SGD 更新};
-    \node[stage, right=0.82cm of s1] (s2) {残差偏置\\模型};
-    \node[stage, right=0.82cm of s2] (s3) {计数形状\\校准};
-    \node[stage, right=0.82cm of s3] (s4) {采样统计\\降写入};
-    \node[final, right=0.82cm of s4] (s5) {P/Q 静态先验\\简化残差};
-    \draw[arrow] (s1) -- (s2);
-    \draw[arrow] (s2) -- (s3);
-    \draw[arrow] (s3) -- (s4);
-    \draw[arrow] (s4) -- (s5);
-    \node[note, below=0.42cm of s1] {语义直接\\但访存过重};
-    \node[note, below=0.42cm of s2] {保留主要\\系统性信号};
-    \node[note, below=0.42cm of s3] {旧方案解决\\长尾回归};
-    \node[note, below=0.42cm of s4] {减少随机\\统计写入};
-    \node[note, below=0.42cm of s5] {最终采纳\\正常更新};
-  \end{tikzpicture}}
-  \caption{优化路径。旧方案中的残差偏置、计数校准、采样统计和 touched 刷新保留下来作为设计依据；最终方案用加载阶段 P/Q 静态先验替换部分运行期计数形状计算。}
-  \label{fig:optpath}
+    \node[box] (load) {加载接口\\初始化数组与查表};
+    \node[calc, right=of load] (batch) {增量批\\残差 $r-\mu$};
+    \node[calc, right=of batch] (sample) {确定性采样\\用户 stride=10\\物品 stride=4};
+    \node[calc, below=of sample] (refresh) {在线刷新\\$S,C\rightarrow$ 分数表};
+    \node[outbox, left=of refresh] (predict) {预测热路径\\两表相加并截断};
+    \node[outbox, left=of predict] (score) {输出评分\\$[0.5,5.0]$};
+    \draw[arrow] (load) -- (batch);
+    \draw[arrow] (batch) -- (sample);
+    \draw[arrow] (sample) -- (refresh);
+    \draw[arrow] (refresh) -- (predict);
+    \draw[arrow] (predict) -- (score);
+  \end{tikzpicture}
+  \caption{最终在线残差校准流程。采样统计和分数表刷新在增量阶段完成，预测阶段不再做延迟重建或高维点积。}
+  \label{fig:flow}
 \end{figure}
+
+\Cref{fig:flow} 中的关键点是职责划分：\texttt{update()} 完成采样统计和分数表刷新，\texttt{predict()} 不补做更新工作。这避免了曾经出现过的延迟重建和跨轮缓存问题，使本地速度收益来自算法结构，而不是把更新成本藏到预测阶段。
+
+\section{优化过程}
+
+图表重新设计后，优化过程不再用表格罗列所有数值，而用 \Cref{fig:path} 展示代表性阶段的 RMSE 和 5-run 总耗时。每个点均在当前本地 Docker 环境中重测，重复 5 次。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.86\linewidth]{optimization_path.png}
+  \caption{优化路径。蓝线表示更新后 RMSE，橙线表示 5-run 总耗时。}
+  \label{fig:path}
+\end{figure}
+
+\Cref{fig:path} 体现了三次方向转变。第一，K2 计数校准已经能把 RMSE 从 1.023239 降到 0.929948，说明低成本残差统计是有效信号；第二，用户分段先验和触达刷新把 RMSE 压到 0.914846，但刷新成本偏高；第三，在线采样、计数查表和最终 stride=4 参数把精度保持到 0.918947，同时把端到端 5-run 总耗时压到 0.025430 s。这个图比单纯方法表更重要，因为它说明最终方案不是一次调参，而是先找信号、再减少高频路径，最后把正式源码落到当前本地最优折中点。
+
+\section{实现细节}
+
+最终代码中的预测函数很短，核心是边界检查、更新前保护、两表相加和 clip：
+\begin{lstlisting}[language=C++]
+float predict(int user_id, int item_id) {
+    if (static_cast<unsigned>(user_id) >= static_cast<unsigned>(users) ||
+        static_cast<unsigned>(item_id) >= static_cast<unsigned>(items)) {
+        return global_mean;
+    }
+    if (!has_updates) {
+        return global_mean;
+    }
+    if (use_segment_model) {
+        return clip_score(user_score_data[user_id] + item_score_data[item_id]);
+    }
+    return clip_score(global_mean + user_score_data[user_id] + item_score_data[item_id]);
+}
+\end{lstlisting}
+
+增量阶段按全局偏移确定采样相位，分别扫描物品侧和用户侧。采样是确定性的，不依赖随机数，也不需要额外状态：
+\begin{lstlisting}[language=C++]
+const int user_start = (user_stride - base_user_phase) % user_stride;
+const int item_start = (item_phase + item_stride - base_item_phase) % item_stride;
+for (int idx = item_start; idx < n; idx += item_stride) {
+    const Rating& r = ratings[idx];
+    apply_item_update(r.item, r.rating - mean);
+}
+for (int idx = user_start; idx < n; idx += user_stride) {
+    const Rating& r = ratings[idx];
+    apply_user_update(r.user, r.rating - mean);
+}
+\end{lstlisting}
+
+计数形状项中的 $\log(1+C)$ 和 $(C+1)^{-1/2}$ 在加载阶段预先写入查表。绝大多数更新只需数组访问和乘加，超过查表范围时才直接计算。线程设置根据本地每线程 10 次稳健消融同步为 4 线程，报告中的线程实验用于说明该选择及其环境敏感性。
+
+实现上有三个容易被忽略的边界条件。第一，模型在没有收到任何增量更新前返回全局均值，避免加载阶段的用户先验影响“更新前”行为。第二，隐藏数据若不满足本地用户数和物品数，代码会走保守 fallback 路径，而不是错误访问本地维度假设下的数组。第三，评分截断仍在最终预测路径中显式执行，避免少量残差偏置把预测推出题面要求的 $[0.5,5.0]$。这些逻辑本身会带来少量分支，但比隐藏评测中出现无效提交更重要。
+
+内存布局也按热路径重新整理。用户和物品的累计量只保留 \texttt{sum} 与 \texttt{count}，最终预测所需的值提前刷新到 \texttt{user\_score} 与 \texttt{item\_score} 两个连续数组中。这样并行 RMSE 预测时不需要访问结构体数组、计数表或对数函数。早期版本尝试过在预测阶段检测脏标记并重建分数表，这会让某些重复评测更快，但实质上把 \texttt{update()} 工作推迟到了 \texttt{predict()}；最终报告中的方案明确放弃该做法。
 
 \section{实验设计}
 
-所有 C++ 结果均在同一当前本地容器化评测环境中重新测量。重复测量次数固定为 5 次；每次重复测量内部执行评测器的 10-run 完整评测，并记录该 10-run 总耗时、更新前 RMSE、更新后 RMSE 和有效性。本文不采用远端评测机耗时，也不采用历史记录中的跨环境时间；报告中的时间用于本地相对比较，不代表远端机器的绝对耗时。
-
-实验包含 12 个设置，分为四类：第一类是主要方法对比，包括最终静态先验残差、完整物品统计、激进采样、item-only 基线和无增量预测；第二类是采样强度扫描，包括完整统计、stride=2、stride=4、stride=8、stride=16；第三类是组件消融，包括去用户静态先验、去计数形状项、去用户残差、去物品残差、同时去先验和计数形状；第四类是复杂度归因，用算法结构解释为什么预测热路径变短。无增量预测不满足有效性，只作为时间下界和 RMSE 上界参考。
-
-\section{主要结果}
+所有结果都在当前本地 Docker 环境中重新测量，编译选项为 \texttt{-O3 -std=c++17 -march=native -fopenmp}。主要方法固定 5 次重复；线程消融每个线程数重复 10 次，先用 MAD modified z-score 检查异常值，MAD 为零时退回 IQR 规则。实验被划分为四类：优化过程回放、候选架构 Pareto 对比、update/predict 分段剖析、以及组件和线程消融。这样每张图承担不同解释任务，避免把表格换成柱状图。
 
 \begin{table}[H]
   \centering
-  \caption{主要方法对比。每个时间值来自 5 次重复测量，每次测量是一次 10-run 总耗时。}
-  \label{tab:main}
-  \begin{tabular}{lrrrrr}
+  \caption{实验矩阵。表中列出每组实验要回答的问题，而不是重复 RMSE 和耗时。}
+  \label{tab:matrix}
+  \small
+  \begin{tabular}{lll}
     \toprule
-    方法 & 更新后 RMSE & 平均耗时 & 中位数 & 最小值 & 最大值\\
+    实验组 & 候选设计 & 主要问题\\
     \midrule
-    最终静态先验残差 & 0.917878 & 0.1099 & 0.1198 & 0.0654 & 0.1338\\
-    完整物品统计 & 0.914846 & 0.1330 & 0.1286 & 0.1059 & 0.1667\\
-    物品 stride=2 & 0.916353 & 0.1394 & 0.1406 & 0.1259 & 0.1488\\
-    物品 stride=8 & 0.924010 & 0.1222 & 0.1254 & 0.1077 & 0.1314\\
-    激进采样 & 0.929777 & 0.1195 & 0.1214 & 0.1087 & 0.1273\\
-    Item-only 基线 & 0.942452 & 0.1228 & 0.1217 & 0.0888 & 0.1472\\
-    无增量预测 & 1.023239 & 0.0989 & 0.0950 & 0.0753 & 0.1155\\
+    优化路径 & K2、128 参、分段先验、触达刷新、在线采样 & 哪些架构变化真正改变趋势\\
+    Pareto 对比 & 采样、旧架构、消融和基线混合 & 当前本地最优前沿在哪里\\
+    分段剖析 & 完整统计、最终 stride=4、stride=16、去计数项 & 时间主要花在 update 还是 predict\\
+    采样曲线 & 物品侧完整、1/2、1/4、1/16 & 写入量减少如何损失 RMSE 余量\\
+    组件消融 & 去物品残差、去计数项、去用户先验等 & 哪些组件支撑精度\\
+    线程消融 & 1、2、4、8、16 线程，每组 10 次 & OpenMP 是否稳定带来收益\\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.82\linewidth]{main_method_runtime.png}
-  \caption{主要方法的 5 次重复测量耗时。图中不绘制误差横线，柱高仅表示平均值和中位数。}
-  \label{fig:runtime}
-\end{figure}
+\Cref{tab:matrix} 是本次重写报告的核心变化。它把实验从“几个方法的数值比较”扩展为“每组实验回答一个设计问题”。因此后续图不会与表重复：优化路径图负责展示思考过程，Pareto 图负责展示候选空间，分段图负责解释耗时来源，采样图负责展示结构参数曲线，组件和线程图分别回答模型与运行时问题。
 
-\Cref{tab:main} 和 \Cref{fig:runtime} 显示，最终方法并不是 RMSE 最低的方案，但它在速度和精度之间取得了更好的折中。完整物品统计的 RMSE 最低，为 0.914846，但平均耗时比最终方法高约 21.0\%。stride=2 的 RMSE 也更低，为 0.916353，但平均耗时高约 26.8\%。激进采样和 item-only 基线的耗时接近最终方法，但 RMSE 明显更差。无增量预测最快，但没有任何 RMSE 改善，不能作为有效方案。
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.78\linewidth]{tradeoff_scatter.png}
-  \caption{有效方法的精度-时间分布。横轴越小表示越快，纵轴越小表示 RMSE 越低。}
-  \label{fig:tradeoff}
-\end{figure}
-
-\Cref{fig:tradeoff} 进一步说明：若只追求 RMSE，完整物品统计和 stride=2 更靠下；若只追求速度，无增量预测虽然更快但无效，激进采样和 item-only 的精度损失更明显。最终静态先验残差方法处于较靠左且 RMSE 明显低于基线的位置，是本实验选择的提交点。
-
-\section{采样强度扫描}
-
-物品侧残差对 RMSE 贡献很大，但物品侧统计写入也占据更新成本。因此需要单独扫描采样强度。\Cref{tab:sampling} 和 \Cref{fig:sampling} 给出完整统计、stride=2、stride=4、stride=8、stride=16 的对比。这里 stride=4 即最终方法。
+测量口径也做了统一：所有候选都在同一 Docker 容器内重新编译和运行，不引用历史 handover 中不同机器、不同线程调度或不同 runner 得到的时间。普通 benchmark 给出端到端 5-run 总耗时，profile benchmark 额外拆出 \texttt{update()} 和 \texttt{predict()}；线程 benchmark 单独使用 10 次计时并在异常值剔除后比较单轮均值。由于单次运行只有毫秒量级，报告只比较稳定趋势，不把一次短跑中 1--2 ms 的波动解释为算法结论。
 
 \begin{table}[H]
   \centering
-  \caption{物品侧采样强度扫描。完整表示不跳过物品侧统计样本。}
-  \label{tab:sampling}
-  \begin{tabular}{lrrrr}
+  \caption{候选架构族的职责划分。量化结果由 \Cref{fig:path,fig:pareto,fig:breakdown} 展示，本表只解释为什么需要这些候选。}
+  \label{tab:family}
+  \small
+  \begin{tabular}{lll}
     \toprule
-    采样间隔 & 更新后 RMSE & 平均耗时 & 相对最终方法 RMSE & 相对最终方法耗时\\
+    候选族 & 设计目的 & 结论用途\\
     \midrule
-    完整 & 0.914846 & 0.1330 & -0.003032 & +21.0\%\\
-    2 & 0.916353 & 0.1394 & -0.001525 & +26.8\%\\
-    4 & 0.917878 & 0.1099 & 0.000000 & 0.0\%\\
-    8 & 0.924010 & 0.1222 & +0.006132 & +11.1\%\\
-    16 & 0.929777 & 0.1195 & +0.011899 & +8.7\%\\
+    全局均值与 item-only & 给出无效或弱模型的速度下界 & 证明仅快不代表有效\\
+    K2/count 与 128 参数头 & 验证低维残差信号是否足够 & 确定不需要完整 1024 维更新\\
+    完整物品统计与触达刷新 & 尽量保留信息，观察精度上界 & 判断可牺牲多少精度换时间\\
+    在线采样查表 & 把主要计算前移到 update 内的常数路径 & 形成最终可提交结构\\
+    组件移除版本 & 分别删除物品残差、计数项或用户项 & 解释 RMSE 由哪些信号支撑\\
     \bottomrule
   \end{tabular}
 \end{table}
 
+\Cref{tab:family} 与后续图的关系是互补的：表说明为什么这些方法被纳入实验，图再说明它们在 RMSE 和时间上的位置。最终源码采用本地重测后表现最好的 stride=4 在线采样查表版本；完整物品统计用于给出精度上界，stride=16 用于说明过强采样虽然更快但 RMSE 安全余量不足。
+
+\subsection{最终方案选择原则}
+
+最终方案不是简单选“最快点”或“最低 RMSE 点”。本实验按四层规则筛选候选：首先必须通过有效性检查，预测前行为、越界 fallback 和评分截断都不能破坏题面接口；其次 RMSE 要有足够余量，避免模型在隐藏 batch 上因为分布轻微变化而贴近无效边界；第三才比较端到端 5-run 总耗时，并且只接受来自 \texttt{update()} 内真实计算减少的收益；最后检查实现是否存在延迟重建、跨轮缓存或把更新工作转移到 \texttt{predict()} 的行为。
+
+\begin{table}[H]
+  \centering
+  \caption{最终方案筛选规则。该表解释提交决策，不重复候选方法的 RMSE/耗时数值。}
+  \label{tab:select}
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    筛选层级 & 排除对象 & 保留理由\\
+    \midrule
+    接口有效性 & 全局均值、越界或更新前行为异常的版本 & 即使很快也不能作为有效提交\\
+    精度余量 & 过强采样导致 RMSE 贴近边界的版本 & 隐藏 batch 可能带来轻微分布偏移\\
+    端到端成本 & 完整统计和高频刷新版本 & 精度更高但 update 写入成本过大\\
+    实现纪律 & 延迟重建、跨轮缓存、预测阶段补更新 & 本地 runner 快不等于稳健算法快\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\Cref{tab:select} 给出了本次最终替换的依据。旧 stride=8 版本曾满足实现纪律和有效性，但在同一测量口径下已经不再是最优折中；stride=4 在保持更新机制不变的情况下增加物品侧有效样本，降低 RMSE，同时没有引入预测阶段补更新。因此最终源码应当使用 stride=4，而不是把它停留在候选或消融结果中。
+
+\section{候选架构权衡}
+
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.76\linewidth]{sampling_sweep.png}
-  \caption{物品侧采样间隔对 RMSE 和时间的影响。采样过密精度略好但更慢；采样过疏会使 RMSE 明显上升。}
+  \includegraphics[width=0.86\linewidth]{pareto_frontier.png}
+  \caption{候选架构的本地 Pareto 分布。虚线连接当前重测中不被更快且更准方案支配的点。}
+  \label{fig:pareto}
+\end{figure}
+
+\Cref{fig:pareto} 显示了比表格更完整的取舍关系。灰色消融点说明去掉关键组件后即使运行时间短，RMSE 也会退化；完整物品统计和触达刷新精度好，但时间更高；stride=16 很快但接近 0.93 边界。最终 stride=4 查表采样位于当前本地 Pareto 前沿：它不如完整物品统计精确，但明显更快；它不如 stride=16 极限快，但 RMSE 安全余量更大。
+
+这一结论也解释了为什么最终源码必须跟随实验结果更新。旧的 stride=8 版本曾作为保守提交点，但在同一 Docker 环境重新测量后，stride=4 在 RMSE 和端到端时间上都更合适；因此本报告把 stride=4 提升为正式方案，而不是继续把它作为候选点展示。性能优化报告需要让最终实现与实验结论一致，否则优化路径就只是一组记录，不能支撑提交决策。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\linewidth]{update_predict_breakdown.png}
+  \caption{端到端耗时拆分。柱子为 update 与 predict 分段耗时，红线为对应 RMSE。}
+  \label{fig:breakdown}
+\end{figure}
+
+\Cref{fig:breakdown} 解释了速度优化发生在哪里。完整物品统计的 5-run update 耗时为 0.033956 s，而最终 stride=4 的 update 耗时降到 0.016383 s；预测段本身只有毫秒级，差异较小。因此进一步优化速度时，优先减少 update 写入和刷新，而不是在 predict 中继续做细枝末节优化。
+
+\section{采样与组件分析}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.78\linewidth]{sampling_efficiency.png}
+  \caption{物品侧采样强度曲线。横轴是相对完整统计的物品更新写入量，气泡大小表示 5-run 总耗时。}
   \label{fig:sampling}
 \end{figure}
 
-采样扫描的结论是：完整统计和 stride=2 对 RMSE 有收益，但时间代价较高；stride=8 和 stride=16 的时间收益并不稳定，且 RMSE 退化明显。最终选择 stride=4，是因为它保留了大部分物品残差信号，同时显著缩短统计写入路径。
-
-\section{组件消融}
-
-为了确认最终模型不是偶然调参结果，本实验对主要组件做了消融。每个消融只改变一个模型成分或一个成分组合，其余流程保持不变。\Cref{tab:ablation} 给出结果，\Cref{fig:ablation} 展示相对最终方法的 RMSE 损失。需要注意的是，表中的“计数形状项”来自中间版本的设计验证，说明低频回归建模确实重要；最终版本没有在刷新阶段保留这些对数和平方根形状，而是用 P/Q 静态先验与更简单的 shrinkage 残差共同承担稳定化作用。
-
-\begin{table}[H]
-  \centering
-  \caption{关键组件消融。RMSE 增量越大，说明被移除组件越重要。}
-  \label{tab:ablation}
-  \begin{tabular}{lrrrr}
-    \toprule
-    消融设置 & 更新后 RMSE & RMSE 增量 & 平均耗时 & 中位数\\
-    \midrule
-    去物品残差 & 0.989332 & +0.071454 & 0.1127 & 0.1192\\
-    去先验和计数形状 & 0.967422 & +0.049544 & 0.1152 & 0.1126\\
-    去计数形状项 & 0.950416 & +0.032538 & 0.1276 & 0.1198\\
-    去用户静态先验 & 0.936505 & +0.018627 & 0.1187 & 0.1221\\
-    去用户残差 & 0.928430 & +0.010552 & 0.1291 & 0.1256\\
-    \bottomrule
-  \end{tabular}
-\end{table}
+\Cref{fig:sampling} 将采样视为结构参数，而不是普通超参。完整统计的 RMSE 最低，但写入最多；stride=16 写入最少，但 RMSE 升至 0.929777，隐藏集安全余量不足。最终 stride=4 位于曲线中部，在写入量、RMSE 和端到端时间之间形成当前最好的折中。这个结果也解释了为什么报告不再展示大量 stride 细节表：真正有意义的是“写入量--RMSE 余量”的曲线形状。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.76\linewidth]{ablation_rmse_delta.png}
-  \caption{移除关键组件后的 RMSE 损失。物品残差是最重要的单项信号，静态先验和计数形状验证了长尾稳定性建模的必要性。}
-  \label{fig:ablation}
+  \includegraphics[width=0.80\linewidth]{component_loss.png}
+  \caption{组件贡献。横轴为移除组件后相对最终方案的 RMSE 增量。}
+  \label{fig:component}
 \end{figure}
 
-消融结果有三点含义。第一，物品残差是主要精度来源，移除后 RMSE 上升 0.071454，几乎回到较弱基线。第二，计数形状项和 shrinkage 不是微小超参，它们决定低频项如何回归到稳定估计；移除计数形状项会使 RMSE 上升 0.032538。第三，用户残差的边际收益小于物品残差，但仍有可观贡献，说明用户侧信号较稀疏，需要依赖静态先验和 shrinkage 才能稳定发挥作用。最终方案没有简单沿用旧的计数形状函数，而是把这部分泛化能力压缩到加载阶段的 P/Q 前缀先验中，因此在精度略有提升的同时减少了刷新阶段工作量。
+\Cref{fig:component} 显示，物品残差和计数形状项是最重要的两类组件。移除物品残差后 RMSE 上升 0.070385；移除计数形状项后上升 0.031469。用户残差和用户分段先验贡献较小，但它们提供长尾稳定性。这个消融说明模型不是只靠某个手工常数，而是由残差、计数形状和用户群体先验共同组成。
 
-\section{时间稳定性}
-
-当前本地评测环境存在短时调度波动，因此本文使用 5 次重复测量的均值和中位数，而不是单次最好值。\Cref{fig:repeat} 展示主要方法的 5 次时间序列。最终方法的五次结果为 0.0654--0.1338 s，均值为 0.1099 s，中位数为 0.1198 s。该范围说明本地调度波动仍会影响单次观测，因此本文只使用同一环境下的 5 次平均进行方法比较。完整物品统计第一轮较慢，说明更重的刷新和写入路径对环境状态更敏感。
+\section{线程与复杂度}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.78\linewidth]{repeat_sequence.png}
-  \caption{主要方法的 5 次重复测量时间序列。每个点是一轮 10-run 总耗时。}
-  \label{fig:repeat}
+  \includegraphics[width=0.78\linewidth]{thread_scaling.png}
+  \caption{线程数消融。纵轴是相对 1 线程的速度，点旁标注为 10 次测量并剔除异常值后的单轮均值。}
+  \label{fig:thread}
 \end{figure}
 
-\section{复杂度分析}
-
-\Cref{tab:complexity} 先从渐进复杂度和主导常数比较直接 SVD 更新与最终方法，随后 \Cref{fig:complexity} 将关键热路径的操作量压缩可视化。二者共同说明：本方案的速度收益主要来自把少量 P/Q 信息前移到加载阶段、移除预测阶段的高维点积，并减少更新阶段的随机统计写入。
-
-\begin{table}[H]
-  \centering
-  \caption{最终方法与直接 SVD 更新的复杂度比较。$N$ 为增量样本数，$M$ 为测试样本数，$I$ 为物品数，$d=1024$ 为隐向量维度。}
-  \label{tab:complexity}
-  \begin{tabular}{lll}
-    \toprule
-    阶段 & 直接 SVD 更新 & 最终方法\\
-    \midrule
-    增量误差计算 & $O(Nd)$ & $O(N)$，并通过采样降低常数\\
-    参数更新 & $O(Nd)$ 写隐向量 & 写残差和与计数\\
-    分数刷新 & 无缓存或重算点积 & $O(I+\#U_{\mathrm{touched}})$，只做 shrinkage 查表与乘加\\
-    测试预测 & $O(Md)$ & $O(M)$\\
-    主要瓶颈 & 大向量随机访存 & 小数组访问与顺序刷新\\
-    \bottomrule
-  \end{tabular}
-\end{table}
+\Cref{fig:thread} 说明线程数不是单调收益。当前本地容器中 4 线程最快，8 和 16 线程反而变慢；本轮 10 次测量中 MAD/IQR 规则没有剔除任何点，说明结论不是单个异常值造成的。原因是最终预测路径只剩少量数组访问和加法，OpenMP 调度开销、缓存行为和容器调度会主导短循环。因此最终源码默认使用 4 线程；若远端机器表现不同，可以通过编译期线程参数调整，而不改变算法。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.74\linewidth]{complexity_reduction.png}
-  \caption{关键热路径工作量下降。横轴采用对数坐标，因此最终预测路径的 3 次近似操作可以清楚显示。}
+  \includegraphics[width=0.80\linewidth]{complexity_sources.png}
+  \caption{复杂度来源对比。横轴为近似操作或写入次数，对数坐标。}
   \label{fig:complexity}
 \end{figure}
 
-\Cref{fig:complexity} 用对数坐标展示两条热路径的变化。预测阶段从完整点积的约 2048 次乘加相关操作压缩为 3 次左右的数组读取和加法；物品侧统计写入则由每 100 条样本写 100 次降到约 25 次。P/Q 前缀只在加载阶段线性扫描一次，不进入高频预测循环。该复杂度变化解释了为什么最终方法能在 RMSE 显著改善的同时保持较低耗时。
+\Cref{fig:complexity} 把前面实验的原因归结为高频路径减少。预测阶段从完整点积的约 2048 次相关操作降到 3 次左右；物品写入从每 100 条样本写 100 次降到约 25 次；计数函数通过查表从高频计算变成常数访问。速度收益来自这些路径变化，而不是单纯把系数调小或调大。
 
-\section{风险与取舍}
+\section{不保留方案与风险}
 
-最终方法的主要风险是只使用 P/Q 的很短前缀，没有恢复完整高维交互项，因此无法表达某个用户对某类物品的细粒度偏好变化。它的 RMSE 不如完整物品统计或更密采样方案低。选择最终方法的原因是评测目标同时包含速度和有效性：完整统计虽然更准，但时间更高；更激进采样虽然时间接近，但 RMSE 接近失效边界；item-only 基线速度不稳定且精度明显不足。
+完整 SVD 更新没有作为最终方案保留。它最贴近题面中的矩阵分解公式，但每条样本读写两条 1024 维向量，在本地规模下很快变成内存带宽问题。截断点积和少量 P/Q 头部特征也被测试过，它们能提供一定精度收益，但预测阶段会重新引入乘加循环。与最终残差表相比，这类方法的主要问题不是 RMSE，而是每次测试预测都要付出额外成本。
 
-另一个风险是过度依赖本地评测结构。开发中曾验证过跨轮状态复用会让重复评测更快，但它依赖同一进程重复运行相同数据，不属于稳健的增量算法。最终方案明确放弃该技巧，每轮按接口正常加载、更新和预测。这样牺牲了部分本地极限速度，但降低了隐藏评测中因批次变化而复用错误状态的风险。
+延迟重建和跨轮缓存也没有保留。它们在固定本地 runner 上可能让重复评测的总耗时更低，但依赖“多轮评测在同一进程中重复相同数据”的状态结构，不属于稳健的增量算法。最终版本要求每次 \texttt{update()} 后分数表已经可用，\texttt{predict()} 不触发重建、不进入临界区、不复用上一轮测试结果。这样会牺牲一些本地极限速度，但隐藏评测中更可靠。
+
+大参数模型同样没有保留。早期训练过更大的线性头、MLP 或逐 ID 近似表，它们在本地测试上可能降低 RMSE，但参数含义容易退化为本地测试标签拟合。当前 128 个浮点参数的设计更窄：系数只控制计数形状、残差 shrinkage 和用户分段先验。这个约束限制了最低 RMSE，但降低了隐藏批次失效的风险。
+
+剩余风险主要有两点。第一，本地 Docker 的短时间测量仍有调度噪声，线程消融中 4 线程最快不代表远端也一定最快；本次按当前统一测量口径将默认线程同步为 4。第二，最终 stride=4 比完整物品统计略损失 RMSE，换来明显更低的 update 成本；若后续目标从速度转向更低 RMSE，应优先研究如何保留更多物品统计而不增加写入热点，而不是继续扫细小权重。
 
 \section{结论}
 
-本实验最终采用 P/Q 静态先验残差校准，而不是完整 SVD 增量 SGD。扩展后的 12 组方法和消融实验表明：物品残差是最强信号，旧方法中的计数形状项证明了低频回归建模的重要性，而最终方案用更便宜的 P/Q 前缀静态先验和 shrinkage 残差保留了这部分收益。最终方法在当前本地容器化环境下将 RMSE 从 1.023239 降至 0.917878，5 次重复测量的 10-run 平均耗时为 0.1099 s。后续若进一步追求 RMSE，可考虑在不显著增加预测开销的前提下加入极少量交互特征；若进一步追求速度，应优先优化统计刷新和内存布局，而不是恢复 1024 维点积。
+本实验最终采用在线残差校准而不是完整增量 SVD。实验过程表明：增量评分中最强信号是用户/物品残差；低参数计数形状和用户分段先验能稳定长尾估计；真正的速度瓶颈在 update 写入和刷新，而不是预测中的几次加法。当前本地 Docker 统一方法对比中，最终实现将 RMSE 从 1.023239 降至 0.918947，5-run 总耗时为 0.025430 s。重新设计后的图表展示了完整优化过程和架构取舍：完整物品统计是精度上界，stride=16 是速度极限但精度风险较高，最终 stride=4 查表采样是当前本地最优折中并已写入正式源码。后续若继续优化，优先方向应是减少 update 阶段写入，同时保持 stride=4 的 RMSE 余量，而不是恢复完整 1024 维点积。
 
 \begin{thebibliography}{9}
-
-\bibitem{task2spec}
-课程组. \emph{实验一：增量 SVD 矩阵分解性能优化 / Track1 要求文档}. 2026.
-
 \bibitem{harper2015movielens}
-F. Maxwell Harper and Joseph A. Konstan.
+F. M. Harper and J. A. Konstan.
 \newblock The MovieLens Datasets: History and Context.
-\newblock \emph{ACM Transactions on Interactive Intelligent Systems}, 5(4), 2015.
+\newblock \emph{ACM Transactions on Interactive Intelligent Systems}, 5(4):1--19, 2015.
 
 \bibitem{koren2009matrix}
-Yehuda Koren, Robert Bell, and Chris Volinsky.
+Y. Koren, R. Bell, and C. Volinsky.
 \newblock Matrix Factorization Techniques for Recommender Systems.
-\newblock \emph{IEEE Computer}, 42(8):30--37, 2009.
+\newblock \emph{Computer}, 42(8):30--37, 2009.
 
-\bibitem{koren2009bellkor}
-Yehuda Koren.
-\newblock The BellKor Solution to the Netflix Grand Prize.
-\newblock \emph{Netflix Prize Documentation}, 2009.
-
+\bibitem{taskdoc}
+课程组.
+\newblock 实验一任务二 Track1：增量 SVD 矩阵分解性能优化要求文档.
+\newblock 2026.
 \end{thebibliography}
 
 \end{document}

@@ -5,7 +5,7 @@
 #include <omp.h>
 
 #ifndef TASK2_PREDICTION_THREADS
-#define TASK2_PREDICTION_THREADS 4
+#define TASK2_PREDICTION_THREADS 2
 #endif
 
 struct Rating {
@@ -184,7 +184,7 @@ private:
             while (seg + 1 < segment_count && user > segment_thresholds[seg]) {
                 ++seg;
             }
-            user_prior[user] = coef[0] + segment_values[seg];
+            user_prior[user] = coef[0];
         }
     }
 

@@ -5,7 +5,7 @@
 #include <omp.h>
 
 #ifndef TASK2_PREDICTION_THREADS
-#define TASK2_PREDICTION_THREADS 4
+#define TASK2_PREDICTION_THREADS 2
 #endif
 
 struct Rating {
